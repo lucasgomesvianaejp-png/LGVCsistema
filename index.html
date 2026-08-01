@@ -1032,166 +1032,448 @@
     #smartA4PaginationRoot .report-page { margin-bottom: 0 !important; }
 
   </style>
+
+<style id="lgvAppShellStyles">
+  :root {
+    --app-navy: #0b1728;
+    --app-navy-2: #13243a;
+    --app-orange: #f0a51d;
+    --app-bg: #f3f5f8;
+    --app-line: #dfe5ec;
+    --app-muted: #667085;
+    --app-success: #18794e;
+    --app-danger: #b42318;
+  }
+  body.auth-pending { min-height: 100vh; background: var(--app-bg); }
+  .login-screen[hidden], .app-shell[hidden] { display: none !important; }
+  .login-screen {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: minmax(320px, 1.05fr) minmax(360px, .95fr);
+    background: var(--app-bg);
+  }
+  .login-brand-panel {
+    background:
+      radial-gradient(circle at 18% 18%, rgba(240,165,29,.2), transparent 34%),
+      linear-gradient(145deg, #07111f 0%, #10243d 58%, #0b1728 100%);
+    color: white;
+    padding: clamp(42px, 7vw, 92px);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 100vh;
+  }
+  .login-brand-mark { color: var(--app-orange); font-size: 34px; font-weight: 900; letter-spacing: .045em; }
+  .login-brand-copy { max-width: 620px; }
+  .login-brand-copy h1 { margin: 0 0 18px; font-size: clamp(34px, 5vw, 64px); line-height: 1.04; }
+  .login-brand-copy p { margin: 0; max-width: 540px; color: #c7d2e0; font-size: 17px; line-height: 1.65; }
+  .login-brand-foot { color: #94a3b8; font-size: 13px; }
+  .login-form-panel { display: grid; place-items: center; padding: 34px; }
+  .login-card {
+    width: min(440px, 100%);
+    background: white;
+    border: 1px solid var(--app-line);
+    border-radius: 24px;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, .12);
+    padding: 34px;
+  }
+  .login-card h2 { margin: 0 0 7px; font-size: 27px; color: var(--app-navy); }
+  .login-card > p { margin: 0 0 26px; color: var(--app-muted); }
+  .login-field { display: grid; gap: 7px; margin-bottom: 16px; }
+  .login-field label { font-size: 13px; font-weight: 750; color: #344054; }
+  .login-field input {
+    width: 100%; border: 1px solid #ccd5df; border-radius: 12px; padding: 13px 14px;
+    font: inherit; outline: none; background: #fff;
+  }
+  .login-field input:focus { border-color: var(--app-orange); box-shadow: 0 0 0 3px rgba(240,165,29,.13); }
+  .login-submit {
+    width: 100%; border: 0; border-radius: 12px; padding: 13px 16px; cursor: pointer;
+    background: var(--app-orange); color: #151515; font-weight: 850; font-size: 15px;
+  }
+  .login-submit:disabled { opacity: .6; cursor: wait; }
+  .login-links { display: flex; justify-content: flex-end; margin-top: 13px; }
+  .login-link { border: 0; background: transparent; color: #475467; cursor: pointer; font-weight: 700; padding: 4px 0; }
+  .login-message { min-height: 22px; margin-top: 14px; font-size: 13px; color: var(--app-danger); }
+  .login-message.ok { color: var(--app-success); }
+
+  .app-shell { min-height: 100vh; display: grid; grid-template-columns: 246px minmax(0, 1fr); background: var(--app-bg); }
+  .app-sidebar {
+    position: sticky; top: 0; height: 100vh; padding: 25px 18px; color: white;
+    background: linear-gradient(180deg, #0a1627 0%, #10223a 100%);
+    display: flex; flex-direction: column; z-index: 30;
+  }
+  .sidebar-brand { padding: 7px 10px 28px; }
+  .sidebar-brand strong { display: block; color: var(--app-orange); font-size: 23px; letter-spacing: .05em; }
+  .sidebar-brand span { color: #a9b7c8; font-size: 12px; }
+  .sidebar-nav { display: grid; gap: 8px; }
+  .sidebar-nav button {
+    width: 100%; border: 0; border-radius: 12px; padding: 12px 13px; text-align: left;
+    background: transparent; color: #c8d2df; cursor: pointer; font: inherit; font-weight: 750;
+  }
+  .sidebar-nav button:hover { background: rgba(255,255,255,.07); color: white; }
+  .sidebar-nav button.active { background: rgba(240,165,29,.16); color: #ffd785; }
+  .sidebar-user { margin-top: auto; border-top: 1px solid rgba(255,255,255,.1); padding: 18px 10px 0; }
+  .sidebar-user-email { color: #dce5ef; font-size: 12px; word-break: break-word; margin-bottom: 12px; }
+  .sidebar-logout { width: 100%; border: 1px solid rgba(255,255,255,.16); border-radius: 10px; padding: 9px 10px; color: white; background: transparent; cursor: pointer; }
+  .app-workspace { min-width: 0; }
+  .workspace-topbar {
+    min-height: 72px; padding: 14px 28px; background: white; border-bottom: 1px solid var(--app-line);
+    display: flex; align-items: center; justify-content: space-between; gap: 18px; position: sticky; top: 0; z-index: 20;
+  }
+  .workspace-title h1 { margin: 0; font-size: 21px; color: var(--app-navy); }
+  .workspace-title p { margin: 3px 0 0; color: var(--app-muted); font-size: 12px; }
+  .workspace-sync { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
+  .sync-dot { width: 9px; height: 9px; border-radius: 50%; background: #d97706; box-shadow: 0 0 0 4px rgba(217,119,6,.12); }
+  .sync-dot.ok { background: #16a34a; box-shadow: 0 0 0 4px rgba(22,163,74,.12); }
+  .sync-dot.bad { background: #dc2626; box-shadow: 0 0 0 4px rgba(220,38,38,.12); }
+  .app-page { display: none; padding: 28px; }
+  .app-page.active { display: block; }
+  #pageReports { padding: 0; }
+  .page-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 22px; }
+  .page-heading h2 { margin: 0; color: var(--app-navy); font-size: 27px; }
+  .page-heading p { margin: 6px 0 0; color: var(--app-muted); }
+  .page-actions { display: flex; gap: 9px; flex-wrap: wrap; }
+  .app-btn { border: 1px solid #cad3dd; background: white; color: #24364a; border-radius: 11px; padding: 10px 14px; font-weight: 780; cursor: pointer; }
+  .app-btn.primary { background: var(--app-orange); border-color: var(--app-orange); color: #151515; }
+  .app-btn.dark { background: var(--app-navy); border-color: var(--app-navy); color: white; }
+  .app-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .client-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .client-stat { background: white; border: 1px solid var(--app-line); border-radius: 16px; padding: 17px; }
+  .client-stat span { display: block; color: var(--app-muted); font-size: 12px; margin-bottom: 8px; }
+  .client-stat strong { display: block; color: var(--app-navy); font-size: 25px; }
+  .client-tools { background: white; border: 1px solid var(--app-line); border-radius: 16px; padding: 14px; display: flex; gap: 10px; align-items: center; margin-bottom: 17px; }
+  .client-tools input { flex: 1; min-width: 180px; border: 1px solid #ccd5df; border-radius: 10px; padding: 10px 12px; font: inherit; }
+  .clients-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(310px, .75fr); gap: 18px; align-items: start; }
+  .clients-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .client-card { background: white; border: 1px solid var(--app-line); border-radius: 17px; padding: 18px; box-shadow: 0 8px 24px rgba(15,23,42,.04); }
+  .client-card.active { border-color: var(--app-orange); box-shadow: 0 0 0 3px rgba(240,165,29,.1); }
+  .client-card-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+  .client-card h3 { margin: 0; color: var(--app-navy); font-size: 17px; }
+  .client-card-profile { margin-top: 4px; color: var(--app-muted); font-size: 12px; }
+  .client-period { background: #fff6e8; color: #8a5700; border-radius: 999px; padding: 5px 9px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+  .client-card-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0; }
+  .client-card-metrics div { background: #f7f9fb; border-radius: 10px; padding: 10px; }
+  .client-card-metrics span { display: block; color: var(--app-muted); font-size: 10px; }
+  .client-card-metrics strong { display: block; margin-top: 3px; color: #24364a; font-size: 13px; }
+  .client-card-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .client-updated { color: var(--app-muted); font-size: 11px; }
+  .client-detail { background: white; border: 1px solid var(--app-line); border-radius: 17px; padding: 19px; position: sticky; top: 94px; min-height: 260px; }
+  .client-detail-empty { color: var(--app-muted); text-align: center; padding: 44px 12px; }
+  .client-detail h3 { margin: 0; color: var(--app-navy); }
+  .detail-subtitle { color: var(--app-muted); font-size: 12px; margin-top: 4px; }
+  .detail-section { border-top: 1px solid #edf0f3; padding-top: 14px; margin-top: 14px; }
+  .detail-section h4 { margin: 0 0 9px; color: #344054; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .detail-item { background: #f8fafc; border-radius: 10px; padding: 10px; }
+  .detail-item span { display: block; color: var(--app-muted); font-size: 10px; }
+  .detail-item strong { display: block; color: #24364a; font-size: 12px; margin-top: 3px; word-break: break-word; }
+  .coverage-list { display: flex; flex-wrap: wrap; gap: 7px; }
+  .coverage-chip { border-radius: 999px; padding: 5px 8px; font-size: 10px; font-weight: 780; background: #edf7f1; color: #18794e; }
+  .coverage-chip.missing { background: #fef3f2; color: #b42318; }
+  .period-list { display: flex; flex-wrap: wrap; gap: 7px; }
+  .period-button { border: 1px solid #d7dee7; border-radius: 9px; background: white; padding: 6px 8px; font-size: 11px; cursor: pointer; }
+  .detail-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+  .clients-empty { background: white; border: 1px dashed #cbd5e1; border-radius: 17px; padding: 48px 22px; text-align: center; color: var(--app-muted); }
+  .report-context-bar { background: #eef3f8; border-bottom: 1px solid #dce4ec; padding: 10px 28px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .report-context-bar strong { color: var(--app-navy); }
+  .report-context-bar span { color: var(--app-muted); font-size: 12px; }
+  .report-context-actions { display: flex; gap: 8px; align-items: center; }
+  .report-context-actions button { border: 1px solid #c7d2de; background: white; border-radius: 9px; padding: 7px 10px; cursor: pointer; font-weight: 750; }
+  .report-context-actions button.primary { background: var(--app-orange); border-color: var(--app-orange); }
+  .app-shell .app-header { border-top: 0; }
+  .app-shell .top-strip { height: 5px; }
+  .app-shell main { padding-bottom: 70px; }
+  .firebase-sync-card { display: none !important; }
+  @media (max-width: 1080px) {
+    .client-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .clients-layout { grid-template-columns: 1fr; }
+    .client-detail { position: static; }
+  }
+  @media (max-width: 820px) {
+    .login-screen { grid-template-columns: 1fr; }
+    .login-brand-panel { min-height: auto; padding: 42px 28px; }
+    .login-brand-copy h1 { font-size: 38px; margin-top: 46px; }
+    .login-brand-foot { margin-top: 38px; }
+    .app-shell { grid-template-columns: 1fr; }
+    .app-sidebar { position: static; height: auto; padding: 12px; flex-direction: row; align-items: center; gap: 10px; }
+    .sidebar-brand { padding: 4px 8px; }
+    .sidebar-brand span { display: none; }
+    .sidebar-nav { display: flex; }
+    .sidebar-nav button { width: auto; }
+    .sidebar-user { margin: 0 0 0 auto; border: 0; padding: 0; display: flex; align-items: center; gap: 8px; }
+    .sidebar-user-email { display: none; }
+    .sidebar-logout { width: auto; }
+    .workspace-topbar { top: 0; padding: 12px 16px; }
+    .app-page { padding: 18px 14px; }
+    .clients-grid { grid-template-columns: 1fr; }
+    .report-context-bar { padding: 9px 14px; }
+  }
+  @media (max-width: 560px) {
+    .client-stats { grid-template-columns: 1fr 1fr; }
+    .client-tools { flex-wrap: wrap; }
+    .client-card-metrics { grid-template-columns: 1fr; }
+    .detail-actions { grid-template-columns: 1fr; }
+    .workspace-sync #firebaseAccount { display: none; }
+  }
+  @media print {
+    .login-screen, .app-sidebar, .workspace-topbar, .report-context-bar, #pageClients { display: none !important; }
+    .app-shell { display: block !important; }
+    .app-page { display: none !important; padding: 0 !important; }
+    #pageReports { display: block !important; }
+    .app-workspace { display: block !important; }
+  }
+</style>
+
 </head>
-<body>
-  <div class="top-strip"></div>
-  <header class="app-header">
-    <div class="container header-inner">
-      <div>
-        <div class="brand">LGV CAPITAL</div>
-        <div class="subtitle">Sistema de relatórios mensais · MVP com importação por JSON tratado</div>
+<body class="auth-pending">
+  <section class="login-screen" id="loginScreen">
+    <div class="login-brand-panel">
+      <div class="login-brand-mark">LGV CAPITAL</div>
+      <div class="login-brand-copy">
+        <h1>LGV Invest</h1>
+        <p>Sistema privado para gestão de clientes, consolidação dos dados já importados e emissão dos relatórios mensais da consultoria.</p>
       </div>
-      <div class="client-meta" id="headerMeta">
-        <strong>Nenhum cliente carregado</strong>
-        Importe um JSON tratado para iniciar.
-      </div>
+      <div class="login-brand-foot">Acesso administrativo · LGV Capital</div>
     </div>
-  </header>
+    <div class="login-form-panel">
+      <form class="login-card" id="loginForm">
+        <h2>Entrar no sistema</h2>
+        <p>Use o e-mail e a senha cadastrados no Firebase Authentication.</p>
+        <div class="login-field">
+          <label for="loginEmail">E-mail</label>
+          <input id="loginEmail" type="email" autocomplete="username" required />
+        </div>
+        <div class="login-field">
+          <label for="loginPassword">Senha</label>
+          <input id="loginPassword" type="password" autocomplete="current-password" required />
+        </div>
+        <button class="login-submit" id="loginSubmit" type="submit">Entrar</button>
+        <div class="login-links">
+          <button class="login-link" id="resetPassword" type="button">Esqueci minha senha</button>
+        </div>
+        <div class="login-message" id="loginMessage"></div>
+      </form>
+    </div>
+  </section>
 
-  <main>
-    <div class="container">
-      <section class="control-panel">
-        <div class="control-grid">
-          <div class="dropzone">
-            <h2>Importar relatório de alimentação tratado</h2>
-            <p>Use o JSON canônico gerado pelo ChatGPT a partir dos relatórios do consolidador. Nesta versão, o sistema não lê XLS/PDF diretamente: ele valida e transforma o JSON em uma prévia de relatório.</p>
-            <div class="actions">
-              <label class="btn" for="jsonFile">Importar relatório</label>
-              <input id="jsonFile" type="file" accept="application/json,.json" />
-              <label class="btn ghost" for="commentFile">Importar comentário</label>
-              <input id="commentFile" type="file" accept="application/json,.json" />
-              <label class="btn ghost" for="actionPlanFile">Importar plano de ação</label>
-              <input id="actionPlanFile" type="file" accept="application/json,.json" />
-              <button class="btn ghost" id="loadSample">Carregar exemplo Anacleta</button>
-              <button class="btn secondary" id="clearData">Limpar dados</button>
-            </div>
-            <div class="status-row" id="importStatus">
-              <span class="pill warn">Aguardando importação</span>
-            </div>
+  <div class="app-shell" id="appShell" hidden>
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <strong>LGV</strong>
+        <span>Invest · Relatórios</span>
+      </div>
+      <nav class="sidebar-nav">
+        <button type="button" class="active" id="navClients" data-page="clients">Clientes</button>
+        <button type="button" id="navReports" data-page="reports">Emitir relatório</button>
+      </nav>
+      <div class="sidebar-user">
+        <div class="sidebar-user-email" id="sidebarUserEmail">—</div>
+        <button class="sidebar-logout" type="button" id="firebaseLogout">Sair</button>
+      </div>
+    </aside>
 
-            <div class="firebase-sync-card" id="firebaseSyncCard">
-              <div class="firebase-sync-head">
-                <div>
-                  <strong>Sincronização Firebase</strong>
-                  <span class="firebase-account" id="firebaseAccount">Não conectado</span>
+    <div class="app-workspace">
+      <header class="workspace-topbar">
+        <div class="workspace-title">
+          <h1 id="workspaceTitle">Clientes</h1>
+          <p id="workspaceSubtitle">Cadastros, dados disponíveis e histórico de relatórios.</p>
+        </div>
+        <div class="workspace-sync">
+          <span class="sync-dot" id="syncDot"></span>
+          <span class="pill warn" id="firebaseStatus">Conectando...</span>
+          <span class="firebase-account" id="firebaseAccount">—</span>
+        </div>
+      </header>
+
+      <section class="app-page active" id="pageClients">
+        <div class="page-heading">
+          <div>
+            <h2>Área de clientes</h2>
+            <p>Entre em cada cadastro para conferir o que já foi importado e abrir os relatórios disponíveis.</p>
+          </div>
+          <div class="page-actions">
+            <button class="app-btn" id="refreshClients" type="button">Atualizar lista</button>
+            <button class="app-btn primary" id="newClientReport" type="button">Novo cliente / relatório</button>
+          </div>
+        </div>
+
+        <div class="client-stats">
+          <div class="client-stat"><span>Clientes cadastrados</span><strong id="statClients">0</strong></div>
+          <div class="client-stat"><span>Relatórios disponíveis</span><strong id="statReports">0</strong></div>
+          <div class="client-stat"><span>Clientes com aposentadoria</span><strong id="statGoals">0</strong></div>
+          <div class="client-stat"><span>Atualizados no mês</span><strong id="statUpdated">0</strong></div>
+        </div>
+
+        <div class="client-tools">
+          <input id="clientSearch" type="search" placeholder="Buscar cliente pelo nome ou perfil..." />
+          <span class="pill" id="clientListStatus">Carregando...</span>
+        </div>
+
+        <div class="clients-layout">
+          <div>
+            <div class="clients-grid" id="clientsGrid"></div>
+            <div class="clients-empty" id="clientsEmpty" hidden>
+              <strong>Nenhum cliente cadastrado.</strong>
+              <p>Importe o primeiro JSON na área de emissão de relatório.</p>
+            </div>
+          </div>
+          <aside class="client-detail" id="clientDetail">
+            <div class="client-detail-empty">Selecione um cliente para ver os dados que o sistema já possui.</div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="app-page" id="pageReports">
+        <div class="report-context-bar">
+          <div>
+            <strong id="clientContextName">Nenhum cliente carregado</strong>
+            <span id="clientContextText">Importe ou abra um cadastro para emitir um relatório.</span>
+          </div>
+          <div class="report-context-actions">
+            <button type="button" id="backToClients">Clientes</button>
+            <button type="button" class="primary" id="firebaseSave" disabled>Salvar no cadastro</button>
+          </div>
+        </div>
+
+        <div class="top-strip"></div>
+        <header class="app-header">
+          <div class="container header-inner">
+            <div>
+              <div class="brand">LGV CAPITAL</div>
+              <div class="subtitle">Sistema de relatórios mensais · importação por JSON tratado</div>
+            </div>
+            <div class="client-meta" id="headerMeta">
+              <strong>Nenhum cliente carregado</strong>
+              Importe um JSON tratado para iniciar.
+            </div>
+          </div>
+        </header>
+
+        <main>
+          <div class="container">
+            <section class="control-panel">
+              <div class="control-grid">
+                <div class="dropzone">
+                  <h2>Importar relatório tratado</h2>
+                  <p>Use o JSON canônico gerado a partir dos relatórios do consolidador. O sistema valida o arquivo, preserva os dados anteriores do cliente e adiciona o novo período ao cadastro.</p>
+                  <div class="actions">
+                    <label class="btn" for="jsonFile">Importar relatório</label>
+                    <input id="jsonFile" type="file" accept="application/json,.json" />
+                    <label class="btn ghost" for="commentFile">Importar comentário</label>
+                    <input id="commentFile" type="file" accept="application/json,.json" />
+                    <label class="btn ghost" for="actionPlanFile">Importar plano de ação</label>
+                    <input id="actionPlanFile" type="file" accept="application/json,.json" />
+                    <button class="btn ghost" id="loadSample">Carregar exemplo Anacleta</button>
+                    <button class="btn secondary" id="clearData">Limpar área de emissão</button>
+                  </div>
+                  <div class="status-row" id="importStatus">
+                    <span class="pill warn">Aguardando importação</span>
+                  </div>
                 </div>
-                <span class="pill warn" id="firebaseStatus">Somente local</span>
+
+                <div class="settings-card">
+                  <h3>Configuração do relatório</h3>
+                  <label for="periodSelect">Mês disponível</label>
+                  <select id="periodSelect" class="select-box" disabled>
+                    <option>Importe um JSON</option>
+                  </select>
+
+                  <label for="goalMode">Premissa da meta</label>
+                  <select id="goalMode" class="select-box" disabled>
+                    <option value="auto_rule">Regra automática</option>
+                    <option value="planning">Planejamento</option>
+                    <option value="actual">Rentabilidade real da carteira</option>
+                  </select>
+
+                  <label for="retirementRateMode">Premissa na aposentadoria</label>
+                  <select id="retirementRateMode" class="select-box" disabled>
+                    <option value="planning">Planejamento de aposentadoria</option>
+                    <option value="same_as_accumulation">Mesma taxa real da acumulação</option>
+                  </select>
+
+                  <label for="goalObjective">Objetivo principal</label>
+                  <select id="goalObjective" class="select-box" disabled>
+                    <option value="income">Renda</option>
+                    <option value="wealth">Patrimônio</option>
+                  </select>
+
+                  <label for="incomeModel">Modelo apresentado na meta</label>
+                  <select id="incomeModel" class="select-box" disabled>
+                    <option value="consumption">Consumindo patrimônio</option>
+                    <option value="preservation">Preservando patrimônio</option>
+                  </select>
+
+                  <label for="pdfFormat">Formato do relatório</label>
+                  <select id="pdfFormat" class="select-box">
+                    <option value="a4">A4 tradicional</option>
+                    <option value="mobile">Mobile para cliente</option>
+                  </select>
+
+                  <div class="config-note">
+                    <strong>Comentário do consultor</strong>
+                    Importe separadamente quando a análise final estiver pronta.
+                  </div>
+                  <div class="config-note">
+                    <strong>Plano de ação</strong>
+                    Documento separado, produzido após a avaliação consultiva e importado sem decisão automática de compra.
+                  </div>
+
+                  <div class="block-config">
+                    <div class="block-config-title">
+                      <strong>Blocos do relatório</strong>
+                      <div class="block-actions">
+                        <button type="button" class="mini-btn" id="presetComplete">Completo</button>
+                        <button type="button" class="mini-btn" id="presetSimple">Simples</button>
+                      </div>
+                    </div>
+                    <div class="block-checks" id="blockControls"></div>
+                  </div>
+
+                  <div class="actions" style="margin-top:14px;">
+                    <button class="btn small" id="refreshMarket">Atualizar CDI/IPCA</button>
+                    <button class="btn small" id="downloadPdf">Baixar PDF</button>
+                    <button class="btn small ghost" id="printReport">Imprimir A4 limpo</button>
+                    <button class="btn small ghost" id="toggleActionPlan" disabled>Ver plano de ação</button>
+                    <button class="btn small ghost" id="downloadActionPlan" disabled>Baixar plano</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="report-toolbar" id="reportToolbar">
+              <div class="left">
+                <h2>Prévia do relatório</h2>
+                <p id="reportSubtitle">Selecione um mês disponível para gerar a prévia.</p>
               </div>
               <div class="actions">
-                <button type="button" class="btn small" id="firebaseLogin">Entrar com Google</button>
-                <button type="button" class="btn small secondary" id="firebaseSave" disabled>Salvar cliente atual</button>
-                <button type="button" class="btn small ghost" id="firebaseLogout" disabled>Sair</button>
+                <span class="pill" id="cdiPill">CDI: não atualizado</span>
+                <span class="pill" id="ipcaPill">IPCA: não atualizado</span>
+                <span class="pill" id="reconcilePill">Conciliação: —</span>
               </div>
-              <div class="firebase-client-row">
-                <select class="select-box" id="firebaseClientSelect" disabled>
-                  <option value="">Entre para carregar clientes</option>
-                </select>
-                <button type="button" class="btn small ghost" id="firebaseLoadClient" disabled>Carregar</button>
+            </section>
+
+            <div id="reportRoot">
+              <div class="empty-state">
+                <h2>Importe um JSON para começar</h2>
+                <p>O relatório será gerado aqui com o layout da LGV Capital.</p>
               </div>
-              <p class="firebase-help">O navegador continua como cópia local. Após entrar, cada cliente passa a ter um cadastro próprio na nuvem e as alterações importadas são sincronizadas automaticamente.</p>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <h3>Configuração do relatório</h3>
-            <label for="periodSelect">Mês disponível</label>
-            <select id="periodSelect" class="select-box" disabled>
-              <option>Importe um JSON</option>
-            </select>
-
-            <label for="goalMode">Premissa da meta</label>
-            <select id="goalMode" class="select-box" disabled>
-              <option value="auto_rule">Regra automática</option>
-              <option value="planning">Planejamento</option>
-              <option value="actual">Rentabilidade real da carteira</option>
-            </select>
-
-            <label for="retirementRateMode">Premissa na aposentadoria</label>
-            <select id="retirementRateMode" class="select-box" disabled>
-              <option value="planning">Planejamento de aposentadoria</option>
-              <option value="same_as_accumulation">Mesma taxa real da acumulação</option>
-            </select>
-
-            <label for="goalObjective">Objetivo principal</label>
-            <select id="goalObjective" class="select-box" disabled>
-              <option value="income">Renda</option>
-              <option value="wealth">Patrimônio</option>
-            </select>
-
-            <label for="incomeModel">Modelo apresentado na meta</label>
-            <select id="incomeModel" class="select-box" disabled>
-              <option value="consumption">Consumindo patrimônio</option>
-              <option value="preservation">Preservando patrimônio</option>
-            </select>
-
-            <label for="pdfFormat">Formato do relatório</label>
-            <select id="pdfFormat" class="select-box">
-              <option value="a4">A4 tradicional</option>
-              <option value="mobile">Mobile para cliente</option>
-            </select>
-
-            <div class="config-note">
-              <strong>Comentário do consultor</strong>
-              Importe separadamente quando a análise final estiver pronta.
-            </div>
-            <div class="config-note">
-              <strong>Plano de ação</strong>
-              Documento separado: produzido fora do sistema após a resposta do cliente e importado sem decisão automática de compra.
             </div>
 
-            <div class="block-config">
-              <div class="block-config-title">
-                <strong>Blocos do relatório</strong>
-                <div class="block-actions">
-                  <button type="button" class="mini-btn" id="presetComplete">Completo</button>
-                  <button type="button" class="mini-btn" id="presetSimple">Simples</button>
+            <section class="action-plan-shell" id="actionPlanShell">
+              <div class="action-plan-toolbar">
+                <div>
+                  <h2>Prévia do plano de ação</h2>
+                  <p id="actionPlanSubtitle">Documento separado do relatório mensal.</p>
                 </div>
+                <span class="pill" id="actionPlanValidationPill">Plano: —</span>
               </div>
-              <div class="block-checks" id="blockControls"></div>
-            </div>
-
-            <div class="actions" style="margin-top:14px;">
-              <button class="btn small" id="refreshMarket">Atualizar CDI/IPCA</button>
-              <button class="btn small" id="downloadPdf">Baixar PDF</button>
-              <button class="btn small ghost" id="printReport">Imprimir A4 limpo</button>
-              <button class="btn small ghost" id="toggleActionPlan" disabled>Ver plano de ação</button>
-              <button class="btn small ghost" id="downloadActionPlan" disabled>Baixar plano</button>
-            </div>
+              <div id="actionPlanRoot"></div>
+            </section>
           </div>
-        </div>
-      </section>
-
-      <section class="report-toolbar" id="reportToolbar">
-        <div class="left">
-          <h2>Prévia do relatório</h2>
-          <p id="reportSubtitle">Selecione um mês disponível para gerar a prévia.</p>
-        </div>
-        <div class="actions">
-          <span class="pill" id="cdiPill">CDI: não atualizado</span>
-          <span class="pill" id="ipcaPill">IPCA: não atualizado</span>
-          <span class="pill" id="reconcilePill">Conciliação: —</span>
-        </div>
-      </section>
-
-      <div id="reportRoot">
-        <div class="empty-state">
-          <h2>Importe um JSON para começar</h2>
-          <p>O relatório será gerado aqui com o layout da LGV Capital.</p>
-        </div>
-      </div>
-
-      <section class="action-plan-shell" id="actionPlanShell">
-        <div class="action-plan-toolbar">
-          <div>
-            <h2>Prévia do plano de ação</h2>
-            <p id="actionPlanSubtitle">Documento separado do relatório mensal.</p>
-          </div>
-          <span class="pill" id="actionPlanValidationPill">Plano: —</span>
-        </div>
-        <div id="actionPlanRoot"></div>
+        </main>
       </section>
     </div>
-  </main>
+  </div>
 
 <script>
 // LGV Capital Reports v30 — Marcus upgrade consolidado
@@ -4556,6 +4838,7 @@ document.getElementById('clearData').addEventListener('click', () => {
   localStorage.removeItem('lgv_reports_last_json');
   localStorage.removeItem('lgv_reports_comment_patches');
   localStorage.removeItem('lgv_reports_action_plan_patches');
+  sessionStorage.setItem('lgv_start_blank_report', '1');
   location.reload();
 });
 
@@ -4630,8 +4913,8 @@ window.lgvReportSetStatus = setStatus;
     getFirestore, collection, doc, getDoc, getDocs, setDoc, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
   import {
-    getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
-    setPersistence, browserLocalPersistence
+    getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
+    setPersistence, browserLocalPersistence, sendPasswordResetEmail
   } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
   const firebaseConfig = {
@@ -4647,34 +4930,107 @@ window.lgvReportSetStatus = setStatus;
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const auth = getAuth(app);
-  const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: 'select_account' });
+  const CLIENTS_COLLECTION = 'clients';
+  const DATA_COLLECTION = 'clientData';
 
   const els = {
+    loginScreen: document.getElementById('loginScreen'),
+    loginForm: document.getElementById('loginForm'),
+    loginEmail: document.getElementById('loginEmail'),
+    loginPassword: document.getElementById('loginPassword'),
+    loginSubmit: document.getElementById('loginSubmit'),
+    loginMessage: document.getElementById('loginMessage'),
+    resetPassword: document.getElementById('resetPassword'),
+    appShell: document.getElementById('appShell'),
     account: document.getElementById('firebaseAccount'),
+    sidebarEmail: document.getElementById('sidebarUserEmail'),
     status: document.getElementById('firebaseStatus'),
-    login: document.getElementById('firebaseLogin'),
+    syncDot: document.getElementById('syncDot'),
     logout: document.getElementById('firebaseLogout'),
     save: document.getElementById('firebaseSave'),
-    select: document.getElementById('firebaseClientSelect'),
-    load: document.getElementById('firebaseLoadClient')
+    navClients: document.getElementById('navClients'),
+    navReports: document.getElementById('navReports'),
+    pageClients: document.getElementById('pageClients'),
+    pageReports: document.getElementById('pageReports'),
+    workspaceTitle: document.getElementById('workspaceTitle'),
+    workspaceSubtitle: document.getElementById('workspaceSubtitle'),
+    refreshClients: document.getElementById('refreshClients'),
+    newClientReport: document.getElementById('newClientReport'),
+    backToClients: document.getElementById('backToClients'),
+    clientSearch: document.getElementById('clientSearch'),
+    clientsGrid: document.getElementById('clientsGrid'),
+    clientsEmpty: document.getElementById('clientsEmpty'),
+    clientDetail: document.getElementById('clientDetail'),
+    clientListStatus: document.getElementById('clientListStatus'),
+    statClients: document.getElementById('statClients'),
+    statReports: document.getElementById('statReports'),
+    statGoals: document.getElementById('statGoals'),
+    statUpdated: document.getElementById('statUpdated'),
+    clientContextName: document.getElementById('clientContextName'),
+    clientContextText: document.getElementById('clientContextText')
   };
 
   let currentUser = null;
+  let clients = [];
+  let selectedClientId = '';
   let saveTimer = null;
-  let cloudClients = [];
+  let appPage = 'clients';
 
-  function setFirebaseStatus(message, type = 'warn') {
-    els.status.className = `pill ${type}`;
-    els.status.textContent = message;
-  }
+  const escapeHtml = value => String(value ?? '')
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 
   function slugify(value) {
     return String(value || 'cliente')
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase().trim()
-      .replace(/[^a-z0-9]+/g, '-')
+      .toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '') || 'cliente';
+  }
+
+  function formatMoney(value) {
+    const number = Number(value);
+    return Number.isFinite(number)
+      ? number.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })
+      : '—';
+  }
+
+  function formatDate(value, withTime = false) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString('pt-BR', withTime
+      ? { dateStyle:'short', timeStyle:'short' }
+      : { dateStyle:'short' });
+  }
+
+  function normalizeDateValue(value) {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    if (value?.toDate) return value.toDate().toISOString();
+    return String(value);
+  }
+
+  function setLoginMessage(message = '', type = 'error') {
+    els.loginMessage.textContent = message;
+    els.loginMessage.className = `login-message${type === 'ok' ? ' ok' : ''}`;
+  }
+
+  function setSyncStatus(message, type = 'warn') {
+    els.status.textContent = message;
+    els.status.className = `pill ${type}`;
+    els.syncDot.className = `sync-dot${type === 'ok' ? ' ok' : type === 'bad' ? ' bad' : ''}`;
+  }
+
+  function authErrorMessage(error) {
+    const code = error?.code || '';
+    const map = {
+      'auth/invalid-credential': 'E-mail ou senha incorretos.',
+      'auth/invalid-email': 'Digite um e-mail válido.',
+      'auth/user-disabled': 'Este acesso está desativado no Firebase.',
+      'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos e tente novamente.',
+      'auth/network-request-failed': 'Falha de conexão. Verifique a internet.'
+    };
+    return map[code] || error?.message || 'Não foi possível concluir o acesso.';
   }
 
   function getClientId(data) {
@@ -4690,10 +5046,6 @@ window.lgvReportSetStatus = setStatus;
     return [...periods].sort((a, b) => String(b).localeCompare(String(a)));
   }
 
-  function maxPeriod(data) {
-    return getPeriods(data)[0] || '';
-  }
-
   function mergeAvailableReports(a = [], b = []) {
     const map = new Map();
     [...a, ...b].forEach(item => {
@@ -4706,114 +5058,323 @@ window.lgvReportSetStatus = setStatus;
   function mergeReportData(cloudData, localData) {
     if (!cloudData) return localData;
     if (!localData) return cloudData;
-
-    const localIsNewer = maxPeriod(localData) >= maxPeriod(cloudData);
+    const cloudLatest = getPeriods(cloudData)[0] || '';
+    const localLatest = getPeriods(localData)[0] || '';
+    const localIsNewer = localLatest >= cloudLatest;
     const base = localIsNewer ? localData : cloudData;
     const older = localIsNewer ? cloudData : localData;
     const merged = { ...older, ...base };
-
     merged.client = { ...(cloudData.client || {}), ...(localData.client || {}) };
-    merged.reportSnapshots = {
-      ...(cloudData.reportSnapshots || {}),
-      ...(localData.reportSnapshots || {})
-    };
-    merged.actionPlans = {
-      ...(cloudData.actionPlans || {}),
-      ...(localData.actionPlans || {})
-    };
-    merged.availableReports = mergeAvailableReports(
-      cloudData.availableReports || [],
-      localData.availableReports || []
-    );
-
+    merged.allocationPolicy = { ...(cloudData.allocationPolicy || {}), ...(localData.allocationPolicy || {}) };
+    merged.goal = { ...(cloudData.goal || {}), ...(localData.goal || {}) };
+    merged.assetRegistry = { ...(cloudData.assetRegistry || {}), ...(localData.assetRegistry || {}) };
+    merged.reportSnapshots = { ...(cloudData.reportSnapshots || {}), ...(localData.reportSnapshots || {}) };
+    merged.actionPlans = { ...(cloudData.actionPlans || {}), ...(localData.actionPlans || {}) };
+    merged.availableReports = mergeAvailableReports(cloudData.availableReports || [], localData.availableReports || []);
     const cloudPerf = Array.isArray(cloudData.dailyPerformance) ? cloudData.dailyPerformance : [];
     const localPerf = Array.isArray(localData.dailyPerformance) ? localData.dailyPerformance : [];
-    if (cloudPerf.length || localPerf.length) {
-      merged.dailyPerformance = localPerf.length >= cloudPerf.length ? localPerf : cloudPerf;
+    merged.dailyPerformance = localPerf.length >= cloudPerf.length ? localPerf : cloudPerf;
+    if (Array.isArray(localData.positions) && Array.isArray(cloudData.positions)) {
+      merged.positions = localData.positions.length >= cloudData.positions.length ? localData.positions : cloudData.positions;
     }
     return merged;
   }
 
-  function clientDocRef(clientId) {
-    if (!currentUser) throw new Error('Faça login para acessar o Firebase.');
-    return doc(db, 'users', currentUser.uid, 'reportClients', clientId);
+  function arrayCount(value) {
+    if (Array.isArray(value)) return value.length;
+    if (value && typeof value === 'object') return Object.keys(value).length;
+    return 0;
   }
 
-  async function refreshClientList(preferredId = '') {
-    if (!currentUser) return;
-    setFirebaseStatus('Carregando clientes...', 'warn');
-    const snapshot = await getDocs(collection(db, 'users', currentUser.uid, 'reportClients'));
-    cloudClients = snapshot.docs.map(item => ({ id: item.id, ...item.data() }))
-      .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id), 'pt-BR'));
-
-    els.select.innerHTML = cloudClients.length
-      ? cloudClients.map(item => `<option value="${item.id}">${String(item.name || item.id).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')}</option>`).join('')
-      : '<option value="">Nenhum cliente salvo</option>';
-    els.select.disabled = !cloudClients.length;
-    els.load.disabled = !cloudClients.length;
-
-    const remembered = preferredId || localStorage.getItem('lgv_reports_cloud_last_client') || '';
-    if (remembered && cloudClients.some(item => item.id === remembered)) els.select.value = remembered;
-    setFirebaseStatus(cloudClients.length ? `${cloudClients.length} cliente(s) na nuvem` : 'Nuvem vazia', cloudClients.length ? 'ok' : 'warn');
-    return cloudClients;
+  function firstAndLastDate(rows) {
+    if (!Array.isArray(rows) || !rows.length) return { first:'', last:'' };
+    const values = rows.map(item => item?.date || item?.data || item?.day || item?.positionDate || '')
+      .filter(Boolean).map(String).sort();
+    return { first: values[0] || '', last: values.at(-1) || '' };
   }
 
-  async function saveCurrent(reason = 'salvamento manual', silent = false) {
-    if (!currentUser) throw new Error('Faça login com Google antes de salvar.');
-    const localData = window.lgvGetCurrentReportData?.();
-    if (!localData) throw new Error('Importe ou carregue um cliente antes de salvar.');
+  function latestReport(data) {
+    const period = getPeriods(data)[0] || '';
+    return { period, report: data?.reportSnapshots?.[period] || {} };
+  }
 
-    const clientId = getClientId(localData);
-    if (!silent) setFirebaseStatus('Sincronizando...', 'warn');
+  function extractLatestWealth(data) {
+    const { report } = latestReport(data);
+    const summary = report?.summary || {};
+    const candidates = [
+      summary.currentWealthPositionDetail,
+      summary.currentWealth,
+      summary.endingWealth,
+      summary.finalWealth,
+      report?.currentWealth,
+      data?.goal?.currentWealthUsed
+    ];
+    return candidates.map(Number).find(Number.isFinite) ?? null;
+  }
 
-    const ref = clientDocRef(clientId);
-    const existingSnap = await getDoc(ref);
-    const existingData = existingSnap.exists() ? existingSnap.data()?.data : null;
-    const mergedData = mergeReportData(existingData, localData);
-    const bytes = new Blob([JSON.stringify(mergedData)]).size;
-    if (bytes > 900_000) {
-      throw new Error('O cadastro ultrapassou o limite seguro desta versão. Será necessário dividir os períodos em documentos separados.');
-    }
+  function hasMeaningfulObject(value) {
+    return Boolean(value && typeof value === 'object' && Object.keys(value).length);
+  }
 
-    const client = mergedData.client || {};
-    const periods = getPeriods(mergedData);
-    await setDoc(ref, {
-      clientId,
-      name: client.name || clientId,
+  function buildMetadata(data) {
+    const client = data?.client || {};
+    const periods = getPeriods(data);
+    const performance = Array.isArray(data?.dailyPerformance) ? data.dailyPerformance : [];
+    const perfRange = firstAndLastDate(performance);
+    const { report } = latestReport(data);
+    const goal = data?.goal || {};
+    const positionsCount = arrayCount(data?.positions);
+    const latestWealth = extractLatestWealth(data);
+    const coverage = {
+      cadastro: hasMeaningfulObject(client),
+      posicoes: positionsCount > 0,
+      rentabilidade: performance.length > 0,
+      alocacao: hasMeaningfulObject(data?.allocationPolicy),
+      ativos: hasMeaningfulObject(data?.assetRegistry) || arrayCount(data?.assetRegistry) > 0,
+      aposentadoria: hasMeaningfulObject(goal),
+      relatorios: periods.length > 0,
+      proventos: Boolean(report?.income || report?.incomeSummary || data?.income)
+    };
+    return {
+      clientId: getClientId(data),
+      name: client.name || 'Cliente sem nome',
       profile: client.profile || '',
+      birthDate: client.birthDate || goal.birthDate || '',
       consultingStartDate: client.consultingStartDate || '',
       periods,
       latestPeriod: periods[0] || '',
-      schemaVersion: mergedData.schemaVersion || '1',
+      reportCount: periods.length,
+      positionsCount,
+      performanceRecords: performance.length,
+      performanceStart: perfRange.first,
+      performanceEnd: perfRange.last,
+      latestWealth,
+      goalConfigured: hasMeaningfulObject(goal),
+      retirementAge: goal.retirementAge ?? '',
+      finalAge: goal.finalAge ?? '',
+      desiredIncome: goal.desiredMonthlyIncomeReal ?? '',
+      targetWealth: goal.targetWealthReal ?? goal.supportingTargetWealthReal ?? '',
+      coverage,
+      updatedAtIso: new Date().toISOString()
+    };
+  }
+
+  function showPage(page) {
+    appPage = page === 'reports' ? 'reports' : 'clients';
+    els.pageClients.classList.toggle('active', appPage === 'clients');
+    els.pageReports.classList.toggle('active', appPage === 'reports');
+    els.navClients.classList.toggle('active', appPage === 'clients');
+    els.navReports.classList.toggle('active', appPage === 'reports');
+    if (appPage === 'clients') {
+      els.workspaceTitle.textContent = 'Clientes';
+      els.workspaceSubtitle.textContent = 'Cadastros, dados disponíveis e histórico de relatórios.';
+    } else {
+      els.workspaceTitle.textContent = 'Emissão de relatório';
+      els.workspaceSubtitle.textContent = 'Importação, revisão, comentário, plano de ação e PDF.';
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 80);
+    }
+  }
+
+  function updateReportContext(data = window.lgvGetCurrentReportData?.()) {
+    const client = data?.client || {};
+    const periods = getPeriods(data || {});
+    els.clientContextName.textContent = client.name || 'Nenhum cliente carregado';
+    els.clientContextText.textContent = periods.length
+      ? `${periods.length} período(s) disponível(is) · último: ${periods[0]}`
+      : 'Importe ou abra um cadastro para emitir um relatório.';
+    els.save.disabled = !currentUser || !data;
+  }
+
+  async function getClientData(clientId) {
+    const snap = await getDoc(doc(db, DATA_COLLECTION, clientId));
+    return snap.exists() ? snap.data()?.data || null : null;
+  }
+
+  async function refreshClientList(preferredId = selectedClientId) {
+    if (!currentUser) return [];
+    setSyncStatus('Atualizando clientes...', 'warn');
+    els.clientListStatus.textContent = 'Carregando...';
+    const snapshot = await getDocs(collection(db, CLIENTS_COLLECTION));
+    clients = snapshot.docs.map(item => ({ id: item.id, ...item.data() }))
+      .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id), 'pt-BR'));
+    renderClientList();
+    updateStats();
+    if (preferredId && clients.some(item => item.id === preferredId)) selectClient(preferredId);
+    setSyncStatus('Dados sincronizados', 'ok');
+    els.clientListStatus.textContent = `${clients.length} cliente(s)`;
+    return clients;
+  }
+
+  function updateStats() {
+    const now = new Date();
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    els.statClients.textContent = clients.length;
+    els.statReports.textContent = clients.reduce((sum, item) => sum + Number(item.reportCount || item.periods?.length || 0), 0);
+    els.statGoals.textContent = clients.filter(item => item.goalConfigured).length;
+    els.statUpdated.textContent = clients.filter(item => String(item.updatedAtIso || '').startsWith(thisMonth)).length;
+  }
+
+  function renderClientList() {
+    const term = els.clientSearch.value.trim().toLocaleLowerCase('pt-BR');
+    const filtered = clients.filter(item => {
+      const haystack = `${item.name || ''} ${item.profile || ''} ${item.latestPeriod || ''}`.toLocaleLowerCase('pt-BR');
+      return !term || haystack.includes(term);
+    });
+    els.clientsEmpty.hidden = filtered.length > 0;
+    els.clientsGrid.innerHTML = filtered.map(item => `
+      <article class="client-card ${item.id === selectedClientId ? 'active' : ''}" data-client-id="${escapeHtml(item.id)}">
+        <div class="client-card-head">
+          <div>
+            <h3>${escapeHtml(item.name || item.id)}</h3>
+            <div class="client-card-profile">${escapeHtml(item.profile || 'Perfil não informado')}</div>
+          </div>
+          <span class="client-period">${escapeHtml(item.latestPeriod || 'Sem relatório')}</span>
+        </div>
+        <div class="client-card-metrics">
+          <div><span>Relatórios</span><strong>${Number(item.reportCount || item.periods?.length || 0)}</strong></div>
+          <div><span>Posições</span><strong>${Number(item.positionsCount || 0)}</strong></div>
+          <div><span>Patrimônio</span><strong>${item.latestWealth != null ? escapeHtml(formatMoney(item.latestWealth)) : '—'}</strong></div>
+        </div>
+        <div class="client-card-foot">
+          <span class="client-updated">Atualizado ${escapeHtml(formatDate(item.updatedAtIso, true))}</span>
+          <button class="app-btn" type="button" data-client-open="${escapeHtml(item.id)}">Ver cliente</button>
+        </div>
+      </article>
+    `).join('');
+  }
+
+  function coverageLabel(key) {
+    const labels = {
+      cadastro:'Cadastro', posicoes:'Posições', rentabilidade:'Rentabilidade', alocacao:'Política-alvo',
+      ativos:'Ativos', aposentadoria:'Aposentadoria', relatorios:'Relatórios', proventos:'Proventos'
+    };
+    return labels[key] || key;
+  }
+
+  function selectClient(clientId) {
+    selectedClientId = clientId;
+    const item = clients.find(client => client.id === clientId);
+    renderClientList();
+    if (!item) return;
+    const coverage = item.coverage || {};
+    const periods = Array.isArray(item.periods) ? item.periods : [];
+    els.clientDetail.innerHTML = `
+      <div>
+        <h3>${escapeHtml(item.name || item.id)}</h3>
+        <div class="detail-subtitle">${escapeHtml(item.profile || 'Perfil não informado')} · ${periods.length} relatório(s)</div>
+      </div>
+      <div class="detail-section">
+        <h4>Cadastro</h4>
+        <div class="detail-grid">
+          <div class="detail-item"><span>Nascimento</span><strong>${escapeHtml(formatDate(item.birthDate))}</strong></div>
+          <div class="detail-item"><span>Início da consultoria</span><strong>${escapeHtml(formatDate(item.consultingStartDate))}</strong></div>
+          <div class="detail-item"><span>Último período</span><strong>${escapeHtml(item.latestPeriod || '—')}</strong></div>
+          <div class="detail-item"><span>Última atualização</span><strong>${escapeHtml(formatDate(item.updatedAtIso, true))}</strong></div>
+        </div>
+      </div>
+      <div class="detail-section">
+        <h4>Últimos dados importados</h4>
+        <div class="detail-grid">
+          <div class="detail-item"><span>Posições</span><strong>${Number(item.positionsCount || 0)} registros</strong></div>
+          <div class="detail-item"><span>Rentabilidade diária</span><strong>${Number(item.performanceRecords || 0)} registros</strong></div>
+          <div class="detail-item"><span>Início da série</span><strong>${escapeHtml(formatDate(item.performanceStart))}</strong></div>
+          <div class="detail-item"><span>Fim da série</span><strong>${escapeHtml(formatDate(item.performanceEnd))}</strong></div>
+        </div>
+      </div>
+      <div class="detail-section">
+        <h4>Blocos disponíveis</h4>
+        <div class="coverage-list">
+          ${Object.entries(coverage).map(([key, ok]) => `<span class="coverage-chip ${ok ? '' : 'missing'}">${escapeHtml(coverageLabel(key))}</span>`).join('')}
+        </div>
+      </div>
+      ${item.goalConfigured ? `
+      <div class="detail-section">
+        <h4>Aposentadoria</h4>
+        <div class="detail-grid">
+          <div class="detail-item"><span>Idade-alvo</span><strong>${escapeHtml(item.retirementAge || '—')}</strong></div>
+          <div class="detail-item"><span>Idade final</span><strong>${escapeHtml(item.finalAge || '—')}</strong></div>
+          <div class="detail-item"><span>Meta patrimonial</span><strong>${item.targetWealth !== '' ? escapeHtml(formatMoney(item.targetWealth)) : '—'}</strong></div>
+          <div class="detail-item"><span>Renda desejada</span><strong>${item.desiredIncome !== '' ? escapeHtml(formatMoney(item.desiredIncome)) : '—'}</strong></div>
+        </div>
+      </div>` : ''}
+      <div class="detail-section">
+        <h4>Relatórios disponíveis</h4>
+        <div class="period-list">
+          ${periods.length ? periods.map(period => `<button class="period-button" type="button" data-open-period="${escapeHtml(period)}" data-period-client="${escapeHtml(item.id)}">${escapeHtml(period)}</button>`).join('') : '<span class="detail-subtitle">Nenhum período salvo.</span>'}
+        </div>
+      </div>
+      <div class="detail-actions">
+        <button class="app-btn dark" type="button" data-load-client="${escapeHtml(item.id)}">Abrir relatório</button>
+        <button class="app-btn primary" type="button" data-update-client="${escapeHtml(item.id)}">Atualizar / novo mês</button>
+      </div>
+    `;
+  }
+
+  async function saveCurrent(reason = 'salvamento manual', silent = false) {
+    if (!currentUser) throw new Error('Faça login antes de salvar.');
+    const localData = window.lgvGetCurrentReportData?.();
+    if (!localData) throw new Error('Importe ou carregue um relatório antes de salvar.');
+    const clientId = getClientId(localData);
+    selectedClientId = clientId;
+    if (!silent) setSyncStatus('Salvando...', 'warn');
+    const existing = await getClientData(clientId);
+    const mergedData = mergeReportData(existing, localData);
+    const bytes = new Blob([JSON.stringify(mergedData)]).size;
+    if (bytes > 900_000) throw new Error('O cadastro ultrapassou o limite seguro desta versão do Firestore.');
+    const metadata = buildMetadata(mergedData);
+    await setDoc(doc(db, DATA_COLLECTION, clientId), {
+      clientId,
       data: mergedData,
-      lastSyncReason: reason,
-      updatedAtIso: new Date().toISOString(),
+      updatedAtIso: metadata.updatedAtIso,
       updatedAt: serverTimestamp()
     }, { merge: true });
-
+    await setDoc(doc(db, CLIENTS_COLLECTION, clientId), {
+      ...metadata,
+      lastSyncReason: reason,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
     localStorage.setItem('lgv_reports_cloud_last_client', clientId);
     if (JSON.stringify(mergedData) !== JSON.stringify(localData)) {
       window.lgvLoadReportDataFromCloud?.(mergedData);
     }
+    updateReportContext(mergedData);
     await refreshClientList(clientId);
-    setFirebaseStatus(`Sincronizado ${new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}`, 'ok');
+    setSyncStatus(`Salvo às ${new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}`, 'ok');
     return true;
   }
 
-  async function loadSelectedClient() {
-    if (!currentUser) throw new Error('Faça login para carregar clientes.');
-    const clientId = els.select.value;
-    if (!clientId) throw new Error('Selecione um cliente salvo.');
-    setFirebaseStatus('Carregando cliente...', 'warn');
-    const snap = await getDoc(clientDocRef(clientId));
-    if (!snap.exists() || !snap.data()?.data) throw new Error('Cadastro não encontrado ou incompleto.');
-    window.lgvLoadReportDataFromCloud?.(snap.data().data);
+  async function loadClient(clientId, period = '') {
+    if (!currentUser) throw new Error('Faça login antes de carregar clientes.');
+    setSyncStatus('Carregando cliente...', 'warn');
+    const data = await getClientData(clientId);
+    if (!data) throw new Error('Os dados completos deste cliente não foram encontrados.');
+    selectedClientId = clientId;
+    window.lgvLoadReportDataFromCloud?.(data);
     localStorage.setItem('lgv_reports_cloud_last_client', clientId);
-    setFirebaseStatus('Cliente carregado da nuvem', 'ok');
+    updateReportContext(data);
+    showPage('reports');
+    if (period) {
+      const select = document.getElementById('periodSelect');
+      if ([...select.options].some(option => option.value === period)) {
+        select.value = period;
+        select.dispatchEvent(new Event('change'));
+      }
+    }
+    setSyncStatus('Cliente carregado', 'ok');
+  }
+
+  function startBlankReport() {
+    localStorage.removeItem('lgv_reports_last_json');
+    localStorage.removeItem('lgv_reports_comment_patches');
+    localStorage.removeItem('lgv_reports_action_plan_patches');
+    sessionStorage.setItem('lgv_start_blank_report', '1');
+    location.reload();
   }
 
   window.lgvFirebaseDataChanged = () => {
-    els.save.disabled = !currentUser || !window.lgvGetCurrentReportData?.();
+    const data = window.lgvGetCurrentReportData?.();
+    updateReportContext(data);
+    if (data) selectedClientId = getClientId(data);
   };
 
   window.lgvFirebaseScheduleSave = (reason = 'alteração automática') => {
@@ -4822,80 +5383,104 @@ window.lgvReportSetStatus = setStatus;
     saveTimer = setTimeout(() => {
       saveCurrent(reason, true).catch(error => {
         console.error('Falha na sincronização automática:', error);
-        setFirebaseStatus('Falha ao sincronizar', 'bad');
+        setSyncStatus('Falha ao salvar', 'bad');
       });
-    }, 1200);
+    }, 1400);
   };
 
-  els.login.addEventListener('click', async () => {
+  els.loginForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    setLoginMessage('');
+    els.loginSubmit.disabled = true;
+    els.loginSubmit.textContent = 'Entrando...';
     try {
-      setFirebaseStatus('Abrindo login...', 'warn');
-      await signInWithPopup(auth, provider);
+      await signInWithEmailAndPassword(auth, els.loginEmail.value.trim(), els.loginPassword.value);
     } catch (error) {
-      console.error(error);
-      setFirebaseStatus('Falha no login', 'bad');
-      window.lgvReportSetStatus?.(`Firebase: ${error.message}`, 'bad');
+      setLoginMessage(authErrorMessage(error));
+    } finally {
+      els.loginSubmit.disabled = false;
+      els.loginSubmit.textContent = 'Entrar';
     }
   });
 
-  els.logout.addEventListener('click', async () => {
-    try { await signOut(auth); }
-    catch (error) { setFirebaseStatus('Falha ao sair', 'bad'); }
+  els.resetPassword.addEventListener('click', async () => {
+    const email = els.loginEmail.value.trim();
+    if (!email) return setLoginMessage('Digite seu e-mail para receber a redefinição de senha.');
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setLoginMessage('E-mail de redefinição enviado.', 'ok');
+    } catch (error) {
+      setLoginMessage(authErrorMessage(error));
+    }
   });
 
-  els.save.addEventListener('click', () => {
-    saveCurrent('salvamento manual').catch(error => {
-      console.error(error);
-      setFirebaseStatus('Falha ao salvar', 'bad');
-      window.lgvReportSetStatus?.(`Firebase: ${error.message}`, 'bad');
-    });
+  els.logout.addEventListener('click', () => signOut(auth).catch(console.error));
+  els.navClients.addEventListener('click', () => showPage('clients'));
+  els.navReports.addEventListener('click', () => showPage('reports'));
+  els.backToClients.addEventListener('click', () => showPage('clients'));
+  els.refreshClients.addEventListener('click', () => refreshClientList().catch(handleCloudError));
+  els.newClientReport.addEventListener('click', startBlankReport);
+  els.clientSearch.addEventListener('input', renderClientList);
+  els.save.addEventListener('click', () => saveCurrent('salvamento manual').catch(handleCloudError));
+
+  els.clientsGrid.addEventListener('click', event => {
+    const clientId = event.target.closest('[data-client-open]')?.dataset.clientOpen
+      || event.target.closest('[data-client-id]')?.dataset.clientId;
+    if (clientId) selectClient(clientId);
   });
 
-  els.load.addEventListener('click', () => {
-    loadSelectedClient().catch(error => {
-      console.error(error);
-      setFirebaseStatus('Falha ao carregar', 'bad');
-      window.lgvReportSetStatus?.(`Firebase: ${error.message}`, 'bad');
-    });
+  els.clientDetail.addEventListener('click', event => {
+    const loadId = event.target.closest('[data-load-client]')?.dataset.loadClient;
+    const updateId = event.target.closest('[data-update-client]')?.dataset.updateClient;
+    const periodButton = event.target.closest('[data-open-period]');
+    if (loadId) loadClient(loadId).catch(handleCloudError);
+    if (updateId) loadClient(updateId).catch(handleCloudError);
+    if (periodButton) loadClient(periodButton.dataset.periodClient, periodButton.dataset.openPeriod).catch(handleCloudError);
   });
 
-  els.select.addEventListener('change', () => {
-    els.load.disabled = !els.select.value;
-  });
+  function handleCloudError(error) {
+    console.error(error);
+    setSyncStatus('Erro no Firebase', 'bad');
+    window.lgvReportSetStatus?.(`Firebase: ${error.message}`, 'bad');
+  }
 
   setPersistence(auth, browserLocalPersistence).catch(console.warn);
 
   onAuthStateChanged(auth, async user => {
     currentUser = user;
     if (!user) {
-      els.account.textContent = 'Não conectado';
-      els.login.disabled = false;
-      els.logout.disabled = true;
-      els.save.disabled = true;
-      els.select.disabled = true;
-      els.load.disabled = true;
-      els.select.innerHTML = '<option value="">Entre para carregar clientes</option>';
-      setFirebaseStatus('Somente local', 'warn');
+      document.body.classList.add('auth-pending');
+      els.loginScreen.hidden = false;
+      els.appShell.hidden = true;
+      els.loginPassword.value = '';
+      setSyncStatus('Desconectado', 'warn');
       return;
     }
 
-    els.account.textContent = user.email || user.displayName || 'Conta Google conectada';
-    els.login.disabled = true;
-    els.logout.disabled = false;
-    window.lgvFirebaseDataChanged();
-    setFirebaseStatus('Conectado', 'ok');
+    document.body.classList.remove('auth-pending');
+    els.loginScreen.hidden = true;
+    els.appShell.hidden = false;
+    els.account.textContent = user.email || 'Acesso autenticado';
+    els.sidebarEmail.textContent = user.email || 'Acesso autenticado';
+    setSyncStatus('Conectado', 'ok');
+    updateReportContext();
 
     try {
-      const clients = await refreshClientList();
+      await refreshClientList(localStorage.getItem('lgv_reports_cloud_last_client') || '');
       const localData = window.lgvGetCurrentReportData?.();
-      if (!localData && clients?.length === 1) {
-        els.select.value = clients[0].id;
-        await loadSelectedClient();
+      if (localData) {
+        const localId = getClientId(localData);
+        const exists = clients.some(item => item.id === localId);
+        if (!exists) await saveCurrent('migração dos dados locais', true);
+      }
+      if (sessionStorage.getItem('lgv_start_blank_report') === '1') {
+        sessionStorage.removeItem('lgv_start_blank_report');
+        showPage('reports');
+      } else {
+        showPage('clients');
       }
     } catch (error) {
-      console.error(error);
-      setFirebaseStatus('Sem acesso ao Firestore', 'bad');
-      window.lgvReportSetStatus?.('Firebase conectado, mas o Firestore recusou o acesso. Publique as regras do LGV Reports.', 'bad');
+      handleCloudError(error);
     }
   });
 </script>
