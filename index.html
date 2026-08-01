@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LGV Capital — Relatório Mensal</title>
+  <title>LGV Invest — Clientes e Relatórios</title>
   <style>
     :root {
       --black: #121212;
@@ -1215,8 +1215,107 @@
     .detail-actions { grid-template-columns: 1fr; }
     .workspace-sync #firebaseAccount { display: none; }
   }
+
+  /* Página completa do cliente */
+  .clients-layout { display: block; }
+  .clients-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .client-detail { display: none; }
+  .client-card { cursor: pointer; transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease; }
+  .client-card:hover { transform: translateY(-2px); border-color: #f2c66e; box-shadow: 0 16px 35px rgba(15,23,42,.08); }
+  .client-card-metrics { grid-template-columns: repeat(2, 1fr); }
+  .client-card-metrics div:last-child { grid-column: span 2; }
+  .client-card-foot .app-btn { white-space: nowrap; }
+
+  .profile-back { display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; color: #475467; cursor: pointer; font-weight: 780; padding: 0; margin-bottom: 14px; }
+  .profile-hero {
+    background: linear-gradient(135deg, #0b1728 0%, #152b47 100%); color: white;
+    border-radius: 22px; padding: 25px; margin-bottom: 18px; display: flex; justify-content: space-between;
+    gap: 22px; align-items: flex-start; box-shadow: 0 18px 45px rgba(11,23,40,.16);
+  }
+  .profile-hero h2 { margin: 0; font-size: 28px; }
+  .profile-hero p { margin: 7px 0 0; color: #bfcbda; }
+  .profile-hero-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .profile-hero-chip { border-radius: 999px; background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.12); padding: 6px 10px; color: #e5edf6; font-size: 11px; font-weight: 750; }
+  .profile-hero-actions { display: flex; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
+  .profile-hero-actions .app-btn { border-color: rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: white; }
+  .profile-hero-actions .app-btn.primary { background: var(--app-orange); border-color: var(--app-orange); color: #151515; }
+
+  .profile-tabs { display: flex; gap: 7px; flex-wrap: wrap; background: white; border: 1px solid var(--app-line); border-radius: 15px; padding: 7px; margin-bottom: 18px; }
+  .profile-tab { border: 0; border-radius: 10px; padding: 10px 13px; background: transparent; color: #526174; cursor: pointer; font-weight: 780; }
+  .profile-tab.active { background: #fff3dd; color: #8a5700; }
+  .profile-loading { background: white; border: 1px solid var(--app-line); border-radius: 17px; padding: 60px 20px; text-align: center; color: var(--app-muted); }
+  .profile-grid { display: grid; gap: 15px; }
+  .profile-grid.kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .profile-kpi { background: white; border: 1px solid var(--app-line); border-radius: 16px; padding: 17px; }
+  .profile-kpi span { display: block; color: var(--app-muted); font-size: 11px; margin-bottom: 7px; }
+  .profile-kpi strong { display: block; color: var(--app-navy); font-size: 21px; line-height: 1.15; }
+  .profile-kpi small { display: block; color: #7c8796; margin-top: 6px; }
+  .profile-two { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); gap: 15px; margin-top: 15px; align-items: start; }
+  .profile-panel { background: white; border: 1px solid var(--app-line); border-radius: 17px; padding: 19px; }
+  .profile-panel + .profile-panel { margin-top: 15px; }
+  .profile-panel-head { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; margin-bottom: 15px; }
+  .profile-panel h3 { margin: 0; color: var(--app-navy); font-size: 17px; }
+  .profile-panel-head p { margin: 4px 0 0; color: var(--app-muted); font-size: 12px; }
+  .profile-summary-list { display: grid; gap: 9px; }
+  .profile-summary-row { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid #edf0f3; }
+  .profile-summary-row:last-child { border-bottom: 0; }
+  .profile-summary-row span { color: var(--app-muted); font-size: 12px; }
+  .profile-summary-row strong { color: #24364a; text-align: right; font-size: 12px; }
+  .profile-table-wrap { overflow: auto; }
+  .profile-table { width: 100%; border-collapse: collapse; min-width: 680px; font-size: 12px; }
+  .profile-table th { text-align: left; color: #667085; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; padding: 8px; border-bottom: 1px solid var(--app-line); }
+  .profile-table td { padding: 10px 8px; border-bottom: 1px solid #edf0f3; vertical-align: middle; }
+  .profile-table tr:last-child td { border-bottom: 0; }
+  .profile-table input, .profile-table select { width: 100%; min-width: 95px; border: 1px solid #d3dbe5; border-radius: 8px; padding: 8px; font: inherit; background: white; }
+  .profile-table .asset-name-input { min-width: 190px; }
+  .profile-table .allocation-label-input { min-width: 160px; }
+  .profile-empty { color: var(--app-muted); padding: 26px 10px; text-align: center; }
+
+  .native-form { display: grid; gap: 15px; }
+  .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+  .form-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .native-field { display: grid; gap: 6px; }
+  .native-field.full { grid-column: 1 / -1; }
+  .native-field label { color: #475467; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .035em; }
+  .native-field input, .native-field select, .native-field textarea { width: 100%; border: 1px solid #ccd5df; border-radius: 10px; padding: 10px 11px; font: inherit; background: white; }
+  .native-field textarea { min-height: 88px; resize: vertical; }
+  .native-form-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 3px; }
+  .native-note { border: 1px solid #f1d39c; background: #fff8eb; color: #67533a; border-radius: 12px; padding: 11px 12px; font-size: 12px; }
+  .allocation-total { font-weight: 850; font-size: 12px; color: #344054; }
+  .allocation-total.bad { color: var(--app-danger); }
+  .row-remove { border: 0; border-radius: 8px; background: #fef3f2; color: #b42318; padding: 8px 9px; cursor: pointer; font-weight: 800; }
+  .row-add { border: 1px dashed #cbd5e1; border-radius: 10px; background: #f8fafc; color: #344054; padding: 9px 12px; cursor: pointer; font-weight: 780; }
+  .profile-report-list { display: grid; gap: 10px; }
+  .profile-report-item { border: 1px solid var(--app-line); border-radius: 13px; padding: 14px; display: grid; grid-template-columns: 125px minmax(0,1fr) auto; gap: 14px; align-items: center; }
+  .profile-report-period { color: var(--app-navy); font-weight: 900; }
+  .profile-report-metrics { display: flex; gap: 16px; flex-wrap: wrap; color: #475467; font-size: 11px; }
+  .profile-report-metrics strong { color: #24364a; }
+  .allocation-bars { display: grid; gap: 10px; }
+  .allocation-bar-row { display: grid; grid-template-columns: minmax(120px,.9fr) minmax(180px,1.7fr) 65px; gap: 10px; align-items: center; font-size: 12px; }
+  .allocation-track { height: 9px; border-radius: 999px; background: #edf1f5; overflow: hidden; }
+  .allocation-fill { height: 100%; border-radius: inherit; background: var(--app-orange); }
+  .profile-tag-list { display: flex; gap: 7px; flex-wrap: wrap; }
+  .profile-tag { border-radius: 999px; padding: 6px 9px; background: #eef3f8; color: #344054; font-size: 10px; font-weight: 780; }
+  .native-badge { border-radius: 999px; padding: 5px 8px; font-size: 10px; font-weight: 800; background: #edf7f1; color: #18794e; }
+  .native-badge.pending { background: #fff4dd; color: #9b6500; }
+
+  @media (max-width: 1180px) {
+    .clients-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .profile-grid.kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .profile-two { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 760px) {
+    .clients-grid { grid-template-columns: 1fr; }
+    .profile-grid.kpis, .form-grid, .form-grid.three { grid-template-columns: 1fr; }
+    .profile-hero { display: block; }
+    .profile-hero-actions { justify-content: flex-start; margin-top: 18px; }
+    .profile-report-item { grid-template-columns: 1fr; }
+    .allocation-bar-row { grid-template-columns: 1fr 65px; }
+    .allocation-bar-row > span:first-child { grid-column: 1 / -1; }
+  }
+
   @media print {
-    .login-screen, .app-sidebar, .workspace-topbar, .report-context-bar, #pageClients { display: none !important; }
+    .login-screen, .app-sidebar, .workspace-topbar, .report-context-bar, #pageClients, #pageClientProfile { display: none !important; }
     .app-shell { display: block !important; }
     .app-page { display: none !important; padding: 0 !important; }
     #pageReports { display: block !important; }
@@ -1260,7 +1359,7 @@
     <aside class="app-sidebar">
       <div class="sidebar-brand">
         <strong>LGV</strong>
-        <span>Invest · Relatórios</span>
+        <span>Invest · Gestão de clientes</span>
       </div>
       <nav class="sidebar-nav">
         <button type="button" class="active" id="navClients" data-page="clients">Clientes</button>
@@ -1293,7 +1392,7 @@
           </div>
           <div class="page-actions">
             <button class="app-btn" id="refreshClients" type="button">Atualizar lista</button>
-            <button class="app-btn primary" id="newClientReport" type="button">Novo cliente / relatório</button>
+            <button class="app-btn primary" id="newClientReport" type="button">Novo cliente</button>
           </div>
         </div>
 
@@ -1314,13 +1413,36 @@
             <div class="clients-grid" id="clientsGrid"></div>
             <div class="clients-empty" id="clientsEmpty" hidden>
               <strong>Nenhum cliente cadastrado.</strong>
-              <p>Importe o primeiro JSON na área de emissão de relatório.</p>
+              <p>Crie o perfil do primeiro cliente e depois importe o relatório mensal.</p>
             </div>
           </div>
-          <aside class="client-detail" id="clientDetail">
-            <div class="client-detail-empty">Selecione um cliente para ver os dados que o sistema já possui.</div>
-          </aside>
         </div>
+      </section>
+
+      <section class="app-page" id="pageClientProfile">
+        <button class="profile-back" id="profileBack" type="button">← Voltar para clientes</button>
+
+        <div class="profile-hero">
+          <div>
+            <h2 id="profileClientName">Perfil do cliente</h2>
+            <p id="profileClientSubtitle">Cadastro nativo, estratégia, metas e histórico.</p>
+            <div class="profile-hero-meta" id="profileHeroMeta"></div>
+          </div>
+          <div class="profile-hero-actions">
+            <button class="app-btn" id="profileOpenLatest" type="button" disabled>Abrir último relatório</button>
+            <button class="app-btn primary" id="profileNewReport" type="button" disabled>Atualizar / novo mês</button>
+          </div>
+        </div>
+
+        <nav class="profile-tabs" id="profileTabs">
+          <button class="profile-tab active" type="button" data-profile-tab="overview">Visão geral</button>
+          <button class="profile-tab" type="button" data-profile-tab="strategy">Perfil e estratégia</button>
+          <button class="profile-tab" type="button" data-profile-tab="retirement">Aposentadoria e metas</button>
+          <button class="profile-tab" type="button" data-profile-tab="assets">Estante de ativos</button>
+          <button class="profile-tab" type="button" data-profile-tab="reports">Relatórios</button>
+        </nav>
+
+        <div class="profile-loading" id="profileContent">Selecione um cliente na lista.</div>
       </section>
 
       <section class="app-page" id="pageReports">
@@ -1355,7 +1477,7 @@
               <div class="control-grid">
                 <div class="dropzone">
                   <h2>Importar relatório tratado</h2>
-                  <p>Use o JSON canônico gerado a partir dos relatórios do consolidador. O sistema valida o arquivo, preserva os dados anteriores do cliente e adiciona o novo período ao cadastro.</p>
+                  <p>Use o JSON mensal tratado. Cadastro, perfil, política de alocação, aposentadoria e estante de ativos são preenchidos automaticamente pelo perfil nativo do cliente. Arquivos antigos completos continuam compatíveis.</p>
                   <div class="actions">
                     <label class="btn" for="jsonFile">Importar relatório</label>
                     <input id="jsonFile" type="file" accept="application/json,.json" />
@@ -2144,7 +2266,10 @@ function renderActionPlanPreview() {
 
 async function readFile(file) {
   const text = await file.text();
-  const data = JSON.parse(text);
+  const imported = JSON.parse(text);
+  const data = typeof window.lgvPrepareReportImport === 'function'
+    ? await window.lgvPrepareReportImport(imported)
+    : imported;
   loadData(data);
 }
 
@@ -4951,6 +5076,7 @@ window.lgvReportSetStatus = setStatus;
     navClients: document.getElementById('navClients'),
     navReports: document.getElementById('navReports'),
     pageClients: document.getElementById('pageClients'),
+    pageClientProfile: document.getElementById('pageClientProfile'),
     pageReports: document.getElementById('pageReports'),
     workspaceTitle: document.getElementById('workspaceTitle'),
     workspaceSubtitle: document.getElementById('workspaceSubtitle'),
@@ -4960,14 +5086,21 @@ window.lgvReportSetStatus = setStatus;
     clientSearch: document.getElementById('clientSearch'),
     clientsGrid: document.getElementById('clientsGrid'),
     clientsEmpty: document.getElementById('clientsEmpty'),
-    clientDetail: document.getElementById('clientDetail'),
     clientListStatus: document.getElementById('clientListStatus'),
     statClients: document.getElementById('statClients'),
     statReports: document.getElementById('statReports'),
     statGoals: document.getElementById('statGoals'),
     statUpdated: document.getElementById('statUpdated'),
     clientContextName: document.getElementById('clientContextName'),
-    clientContextText: document.getElementById('clientContextText')
+    clientContextText: document.getElementById('clientContextText'),
+    profileBack: document.getElementById('profileBack'),
+    profileClientName: document.getElementById('profileClientName'),
+    profileClientSubtitle: document.getElementById('profileClientSubtitle'),
+    profileHeroMeta: document.getElementById('profileHeroMeta'),
+    profileOpenLatest: document.getElementById('profileOpenLatest'),
+    profileNewReport: document.getElementById('profileNewReport'),
+    profileTabs: document.getElementById('profileTabs'),
+    profileContent: document.getElementById('profileContent')
   };
 
   let currentUser = null;
@@ -4975,10 +5108,31 @@ window.lgvReportSetStatus = setStatus;
   let selectedClientId = '';
   let saveTimer = null;
   let appPage = 'clients';
+  let activeProfileTab = 'overview';
+  let activeClientDoc = null;
+  let activeClientData = null;
+  let creatingClient = false;
 
   const escapeHtml = value => String(value ?? '')
     .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+  const escapeAttr = escapeHtml;
+
+  function clone(value, fallback = null) {
+    if (value == null) return fallback;
+    try { return JSON.parse(JSON.stringify(value)); }
+    catch { return fallback; }
+  }
+
+  function sanitize(value) {
+    if (Array.isArray(value)) return value.map(sanitize).filter(item => item !== undefined);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value)
+        .filter(([, item]) => item !== undefined)
+        .map(([key, item]) => [key, sanitize(item)]));
+    }
+    return value;
+  }
 
   function slugify(value) {
     return String(value || 'cliente')
@@ -4994,6 +5148,20 @@ window.lgvReportSetStatus = setStatus;
       : '—';
   }
 
+  function formatNumber(value, maximumFractionDigits = 0) {
+    const number = Number(value);
+    return Number.isFinite(number)
+      ? number.toLocaleString('pt-BR', { maximumFractionDigits })
+      : '—';
+  }
+
+  function formatPercent(value, alreadyPercent = true) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '—';
+    const percent = alreadyPercent ? number : number * 100;
+    return `${percent.toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 })}%`;
+  }
+
   function formatDate(value, withTime = false) {
     if (!value) return '—';
     const date = new Date(value);
@@ -5003,11 +5171,10 @@ window.lgvReportSetStatus = setStatus;
       : { dateStyle:'short' });
   }
 
-  function normalizeDateValue(value) {
-    if (!value) return '';
-    if (typeof value === 'string') return value;
-    if (value?.toDate) return value.toDate().toISOString();
-    return String(value);
+  function formatPeriod(period) {
+    if (!/^\d{4}-\d{2}$/.test(String(period || ''))) return period || '—';
+    const [year, month] = period.split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString('pt-BR', { month:'long', year:'numeric', timeZone:'UTC' });
   }
 
   function setLoginMessage(message = '', type = 'error') {
@@ -5067,7 +5234,10 @@ window.lgvReportSetStatus = setStatus;
     merged.client = { ...(cloudData.client || {}), ...(localData.client || {}) };
     merged.allocationPolicy = { ...(cloudData.allocationPolicy || {}), ...(localData.allocationPolicy || {}) };
     merged.goal = { ...(cloudData.goal || {}), ...(localData.goal || {}) };
-    merged.assetRegistry = { ...(cloudData.assetRegistry || {}), ...(localData.assetRegistry || {}) };
+    merged.assetRegistry = Array.isArray(localData.assetRegistry) && localData.assetRegistry.length
+      ? localData.assetRegistry
+      : cloudData.assetRegistry;
+    merged.investmentPreferences = { ...(cloudData.investmentPreferences || {}), ...(localData.investmentPreferences || {}) };
     merged.reportSnapshots = { ...(cloudData.reportSnapshots || {}), ...(localData.reportSnapshots || {}) };
     merged.actionPlans = { ...(cloudData.actionPlans || {}), ...(localData.actionPlans || {}) };
     merged.availableReports = mergeAvailableReports(cloudData.availableReports || [], localData.availableReports || []);
@@ -5078,6 +5248,54 @@ window.lgvReportSetStatus = setStatus;
       merged.positions = localData.positions.length >= cloudData.positions.length ? localData.positions : cloudData.positions;
     }
     return merged;
+  }
+
+  function hasMeaningfulObject(value) {
+    return Boolean(value && typeof value === 'object' && Object.keys(value).length);
+  }
+
+  function normalizeAssetRegistry(value) {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === 'object') return Object.values(value);
+    return [];
+  }
+
+  function extractNativeProfile(data = {}) {
+    return {
+      clientProfile: clone(data.client, {}) || {},
+      investmentPreferences: clone(data.investmentPreferences, {}) || {},
+      allocationPolicy: clone(data.allocationPolicy, {}) || {},
+      goal: clone(data.goal, {}) || {},
+      assetRegistry: clone(normalizeAssetRegistry(data.assetRegistry), []) || []
+    };
+  }
+
+  function nativeFromDoc(clientDoc = {}) {
+    return {
+      clientProfile: clone(clientDoc.clientProfile, {}) || {},
+      investmentPreferences: clone(clientDoc.investmentPreferences, {}) || {},
+      allocationPolicy: clone(clientDoc.allocationPolicy, {}) || {},
+      goal: clone(clientDoc.goal, {}) || {},
+      assetRegistry: clone(normalizeAssetRegistry(clientDoc.assetRegistry), []) || []
+    };
+  }
+
+  function applyNativeProfile(data = {}, clientDoc = {}) {
+    const native = nativeFromDoc(clientDoc);
+    const configured = clientDoc?.nativeConfigured === true;
+    const use = (nativeValue, importedValue) => {
+      if (configured) return clone(nativeValue, importedValue);
+      if (Array.isArray(nativeValue)) return nativeValue.length ? clone(nativeValue, []) : clone(importedValue, []);
+      return hasMeaningfulObject(nativeValue) ? clone(nativeValue, {}) : clone(importedValue, {});
+    };
+    return {
+      ...data,
+      client: { ...(data.client || {}), ...use(native.clientProfile, data.client || {}) },
+      investmentPreferences: { ...(data.investmentPreferences || {}), ...use(native.investmentPreferences, data.investmentPreferences || {}) },
+      allocationPolicy: use(native.allocationPolicy, data.allocationPolicy || {}),
+      goal: use(native.goal, data.goal || {}),
+      assetRegistry: use(native.assetRegistry, normalizeAssetRegistry(data.assetRegistry))
+    };
   }
 
   function arrayCount(value) {
@@ -5098,22 +5316,69 @@ window.lgvReportSetStatus = setStatus;
     return { period, report: data?.reportSnapshots?.[period] || {} };
   }
 
-  function extractLatestWealth(data) {
-    const { report } = latestReport(data);
-    const summary = report?.summary || {};
-    const candidates = [
-      summary.currentWealthPositionDetail,
-      summary.currentWealth,
-      summary.endingWealth,
-      summary.finalWealth,
-      report?.currentWealth,
-      data?.goal?.currentWealthUsed
-    ];
-    return candidates.map(Number).find(Number.isFinite) ?? null;
+  function latestPositions(data) {
+    const positions = Array.isArray(data?.positions) ? data.positions : [];
+    if (!positions.length) return [];
+    const dates = positions.map(item => item?.date || item?.positionDate || '').filter(Boolean).map(String).sort();
+    const latestDate = dates.at(-1) || '';
+    return latestDate ? positions.filter(item => String(item?.date || item?.positionDate || '') === latestDate) : positions;
   }
 
-  function hasMeaningfulObject(value) {
-    return Boolean(value && typeof value === 'object' && Object.keys(value).length);
+  function sum(rows, key) {
+    return (rows || []).reduce((total, row) => total + (Number(row?.[key]) || 0), 0);
+  }
+
+  function summarizeClientData(data = {}) {
+    const positions = latestPositions(data);
+    const performance = Array.isArray(data.dailyPerformance) ? [...data.dailyPerformance] : [];
+    performance.sort((a, b) => String(a?.date || '').localeCompare(String(b?.date || '')));
+    const lastPerf = performance.at(-1) || {};
+    const firstPerf = performance[0] || {};
+    const reportInfo = latestReport(data);
+    const reportSummary = reportInfo.report?.summary || {};
+    const investedValue = sum(positions, 'investedValue');
+    const marketValueFromPositions = sum(positions, 'marketValue');
+    const gainValue = positions.some(item => Number.isFinite(Number(item?.gainValue)))
+      ? sum(positions, 'gainValue')
+      : marketValueFromPositions - investedValue;
+    const latestWealthCandidates = [
+      reportSummary.currentWealthPositionDetail,
+      reportSummary.currentWealth,
+      reportSummary.endingWealth,
+      reportSummary.finalWealth,
+      reportInfo.report?.currentWealth,
+      lastPerf.equity,
+      marketValueFromPositions,
+      data?.goal?.initialSimulation?.currentWealthUsed
+    ];
+    const latestWealth = latestWealthCandidates.map(Number).find(Number.isFinite) ?? null;
+    const contributions = sum(performance, 'purchases');
+    const withdrawals = sum(performance, 'sales');
+    const income = sum(performance, 'proceeds');
+    let sinceStartReturn = Number(data?.rentabilitySummary?.sinceStartPercent);
+    if (!Number.isFinite(sinceStartReturn)) {
+      const firstShare = Number(firstPerf.sharePrice);
+      const lastShare = Number(lastPerf.sharePrice);
+      sinceStartReturn = Number.isFinite(firstShare) && firstShare !== 0 && Number.isFinite(lastShare)
+        ? (lastShare / firstShare - 1) * 100
+        : null;
+    }
+    const latestPositionDate = positions[0]?.date || positions[0]?.positionDate || '';
+    return {
+      latestWealth,
+      currentPositionCount: positions.length,
+      investedValue,
+      marketValue: marketValueFromPositions || latestWealth,
+      gainValue,
+      cumulativeContributions: contributions,
+      cumulativeWithdrawals: withdrawals,
+      netContributions: contributions - withdrawals,
+      cumulativeIncome: income,
+      sinceStartReturn: Number.isFinite(sinceStartReturn) ? sinceStartReturn : null,
+      latestPositionDate,
+      latestPeriod: reportInfo.period,
+      latestReportSummary: reportSummary
+    };
   }
 
   function buildMetadata(data) {
@@ -5123,32 +5388,35 @@ window.lgvReportSetStatus = setStatus;
     const perfRange = firstAndLastDate(performance);
     const { report } = latestReport(data);
     const goal = data?.goal || {};
+    const summary = summarizeClientData(data);
     const positionsCount = arrayCount(data?.positions);
-    const latestWealth = extractLatestWealth(data);
     const coverage = {
       cadastro: hasMeaningfulObject(client),
       posicoes: positionsCount > 0,
       rentabilidade: performance.length > 0,
       alocacao: hasMeaningfulObject(data?.allocationPolicy),
-      ativos: hasMeaningfulObject(data?.assetRegistry) || arrayCount(data?.assetRegistry) > 0,
+      ativos: normalizeAssetRegistry(data?.assetRegistry).length > 0,
       aposentadoria: hasMeaningfulObject(goal),
       relatorios: periods.length > 0,
-      proventos: Boolean(report?.income || report?.incomeSummary || data?.income)
+      proventos: Boolean(report?.income || report?.incomeSummary || data?.income || summary.cumulativeIncome)
     };
     return {
       clientId: getClientId(data),
       name: client.name || 'Cliente sem nome',
       profile: client.profile || '',
+      profileStatus: client.profileStatus || '',
       birthDate: client.birthDate || goal.birthDate || '',
       consultingStartDate: client.consultingStartDate || '',
       periods,
       latestPeriod: periods[0] || '',
       reportCount: periods.length,
       positionsCount,
+      currentPositionCount: summary.currentPositionCount,
       performanceRecords: performance.length,
       performanceStart: perfRange.first,
       performanceEnd: perfRange.last,
-      latestWealth,
+      latestWealth: summary.latestWealth,
+      summary,
       goalConfigured: hasMeaningfulObject(goal),
       retirementAge: goal.retirementAge ?? '',
       finalAge: goal.finalAge ?? '',
@@ -5160,17 +5428,21 @@ window.lgvReportSetStatus = setStatus;
   }
 
   function showPage(page) {
-    appPage = page === 'reports' ? 'reports' : 'clients';
+    appPage = ['clients', 'profile', 'reports'].includes(page) ? page : 'clients';
     els.pageClients.classList.toggle('active', appPage === 'clients');
+    els.pageClientProfile.classList.toggle('active', appPage === 'profile');
     els.pageReports.classList.toggle('active', appPage === 'reports');
-    els.navClients.classList.toggle('active', appPage === 'clients');
+    els.navClients.classList.toggle('active', appPage === 'clients' || appPage === 'profile');
     els.navReports.classList.toggle('active', appPage === 'reports');
     if (appPage === 'clients') {
       els.workspaceTitle.textContent = 'Clientes';
-      els.workspaceSubtitle.textContent = 'Cadastros, dados disponíveis e histórico de relatórios.';
+      els.workspaceSubtitle.textContent = 'Lista geral dos clientes e acesso aos perfis completos.';
+    } else if (appPage === 'profile') {
+      els.workspaceTitle.textContent = creatingClient ? 'Novo cliente' : (activeClientDoc?.name || activeClientDoc?.clientProfile?.name || 'Perfil do cliente');
+      els.workspaceSubtitle.textContent = 'Cadastro nativo, estratégia, aposentadoria, ativos e relatórios.';
     } else {
       els.workspaceTitle.textContent = 'Emissão de relatório';
-      els.workspaceSubtitle.textContent = 'Importação, revisão, comentário, plano de ação e PDF.';
+      els.workspaceSubtitle.textContent = 'Importação mensal, revisão, comentário, plano de ação e PDF.';
       setTimeout(() => window.dispatchEvent(new Event('resize')), 80);
     }
   }
@@ -5178,11 +5450,18 @@ window.lgvReportSetStatus = setStatus;
   function updateReportContext(data = window.lgvGetCurrentReportData?.()) {
     const client = data?.client || {};
     const periods = getPeriods(data || {});
-    els.clientContextName.textContent = client.name || 'Nenhum cliente carregado';
+    els.clientContextName.textContent = client.name || activeClientDoc?.clientProfile?.name || 'Nenhum cliente carregado';
     els.clientContextText.textContent = periods.length
-      ? `${periods.length} período(s) disponível(is) · último: ${periods[0]}`
-      : 'Importe ou abra um cadastro para emitir um relatório.';
+      ? `${periods.length} período(s) disponível(is) · último: ${formatPeriod(periods[0])}`
+      : selectedClientId
+        ? 'Cliente selecionado. Importe o relatório mensal tratado.'
+        : 'Importe ou abra um cadastro para emitir um relatório.';
     els.save.disabled = !currentUser || !data;
+  }
+
+  async function getClientRecord(clientId) {
+    const snap = await getDoc(doc(db, CLIENTS_COLLECTION, clientId));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   }
 
   async function getClientData(clientId) {
@@ -5190,16 +5469,15 @@ window.lgvReportSetStatus = setStatus;
     return snap.exists() ? snap.data()?.data || null : null;
   }
 
-  async function refreshClientList(preferredId = selectedClientId) {
+  async function refreshClientList() {
     if (!currentUser) return [];
     setSyncStatus('Atualizando clientes...', 'warn');
     els.clientListStatus.textContent = 'Carregando...';
     const snapshot = await getDocs(collection(db, CLIENTS_COLLECTION));
     clients = snapshot.docs.map(item => ({ id: item.id, ...item.data() }))
-      .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id), 'pt-BR'));
+      .sort((a, b) => String(a.name || a.clientProfile?.name || a.id).localeCompare(String(b.name || b.clientProfile?.name || b.id), 'pt-BR'));
     renderClientList();
     updateStats();
-    if (preferredId && clients.some(item => item.id === preferredId)) selectClient(preferredId);
     setSyncStatus('Dados sincronizados', 'ok');
     els.clientListStatus.textContent = `${clients.length} cliente(s)`;
     return clients;
@@ -5209,38 +5487,60 @@ window.lgvReportSetStatus = setStatus;
     const now = new Date();
     const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     els.statClients.textContent = clients.length;
-    els.statReports.textContent = clients.reduce((sum, item) => sum + Number(item.reportCount || item.periods?.length || 0), 0);
-    els.statGoals.textContent = clients.filter(item => item.goalConfigured).length;
+    els.statReports.textContent = clients.reduce((total, item) => total + Number(item.reportCount || item.periods?.length || 0), 0);
+    els.statGoals.textContent = clients.filter(item => item.goalConfigured || hasMeaningfulObject(item.goal)).length;
     els.statUpdated.textContent = clients.filter(item => String(item.updatedAtIso || '').startsWith(thisMonth)).length;
   }
 
   function renderClientList() {
     const term = els.clientSearch.value.trim().toLocaleLowerCase('pt-BR');
     const filtered = clients.filter(item => {
-      const haystack = `${item.name || ''} ${item.profile || ''} ${item.latestPeriod || ''}`.toLocaleLowerCase('pt-BR');
+      const name = item.name || item.clientProfile?.name || item.id;
+      const profile = item.profile || item.clientProfile?.profile || '';
+      const haystack = `${name} ${profile} ${item.latestPeriod || ''}`.toLocaleLowerCase('pt-BR');
       return !term || haystack.includes(term);
     });
     els.clientsEmpty.hidden = filtered.length > 0;
-    els.clientsGrid.innerHTML = filtered.map(item => `
-      <article class="client-card ${item.id === selectedClientId ? 'active' : ''}" data-client-id="${escapeHtml(item.id)}">
-        <div class="client-card-head">
-          <div>
-            <h3>${escapeHtml(item.name || item.id)}</h3>
-            <div class="client-card-profile">${escapeHtml(item.profile || 'Perfil não informado')}</div>
+    els.clientsGrid.innerHTML = filtered.map(item => {
+      const name = item.name || item.clientProfile?.name || item.id;
+      const profile = item.profile || item.clientProfile?.profile || 'Perfil não informado';
+      const summary = item.summary || {};
+      const nativeOk = item.nativeConfigured === true;
+      return `
+        <article class="client-card" data-client-open="${escapeAttr(item.id)}" tabindex="0">
+          <div class="client-card-head">
+            <div>
+              <h3>${escapeHtml(name)}</h3>
+              <div class="client-card-profile">${escapeHtml(profile)}</div>
+            </div>
+            <span class="client-period">${escapeHtml(item.latestPeriod ? formatPeriod(item.latestPeriod) : 'Sem relatório')}</span>
           </div>
-          <span class="client-period">${escapeHtml(item.latestPeriod || 'Sem relatório')}</span>
-        </div>
-        <div class="client-card-metrics">
-          <div><span>Relatórios</span><strong>${Number(item.reportCount || item.periods?.length || 0)}</strong></div>
-          <div><span>Posições</span><strong>${Number(item.positionsCount || 0)}</strong></div>
-          <div><span>Patrimônio</span><strong>${item.latestWealth != null ? escapeHtml(formatMoney(item.latestWealth)) : '—'}</strong></div>
-        </div>
-        <div class="client-card-foot">
-          <span class="client-updated">Atualizado ${escapeHtml(formatDate(item.updatedAtIso, true))}</span>
-          <button class="app-btn" type="button" data-client-open="${escapeHtml(item.id)}">Ver cliente</button>
-        </div>
-      </article>
-    `).join('');
+          <div class="client-card-metrics">
+            <div><span>Patrimônio</span><strong>${item.latestWealth != null ? escapeHtml(formatMoney(item.latestWealth)) : '—'}</strong></div>
+            <div><span>Rentabilidade acumulada</span><strong>${summary.sinceStartReturn != null ? escapeHtml(formatPercent(summary.sinceStartReturn)) : '—'}</strong></div>
+            <div><span>Base disponível</span><strong>${Number(item.reportCount || item.periods?.length || 0)} relatório(s) · ${Number(item.currentPositionCount || 0)} posições</strong></div>
+          </div>
+          <div class="client-card-foot">
+            <span class="client-updated"><span class="native-badge ${nativeOk ? '' : 'pending'}">${nativeOk ? 'Perfil nativo' : 'Migrar perfil'}</span></span>
+            <button class="app-btn" type="button" data-client-open="${escapeAttr(item.id)}">Entrar no perfil</button>
+          </div>
+        </article>`;
+    }).join('');
+  }
+
+  function routeTo(hash, replace = false) {
+    const target = hash.startsWith('#') ? hash : `#${hash}`;
+    if (window.location.hash === target) return;
+    history[replace ? 'replaceState' : 'pushState']({}, '', target);
+  }
+
+  function navigateClients(updateRoute = true) {
+    creatingClient = false;
+    activeClientDoc = null;
+    activeClientData = null;
+    selectedClientId = '';
+    showPage('clients');
+    if (updateRoute) routeTo('clientes');
   }
 
   function coverageLabel(key) {
@@ -5251,108 +5551,507 @@ window.lgvReportSetStatus = setStatus;
     return labels[key] || key;
   }
 
-  function selectClient(clientId) {
+  async function openClientProfile(clientId, tab = 'overview', updateRoute = true) {
+    if (!currentUser) return;
+    creatingClient = false;
     selectedClientId = clientId;
-    const item = clients.find(client => client.id === clientId);
-    renderClientList();
-    if (!item) return;
-    const coverage = item.coverage || {};
-    const periods = Array.isArray(item.periods) ? item.periods : [];
-    els.clientDetail.innerHTML = `
-      <div>
-        <h3>${escapeHtml(item.name || item.id)}</h3>
-        <div class="detail-subtitle">${escapeHtml(item.profile || 'Perfil não informado')} · ${periods.length} relatório(s)</div>
+    activeProfileTab = tab;
+    showPage('profile');
+    els.profileContent.innerHTML = '<div class="profile-loading">Carregando perfil completo...</div>';
+    setSyncStatus('Carregando cliente...', 'warn');
+    try {
+      const [clientDoc, rawData] = await Promise.all([getClientRecord(clientId), getClientData(clientId)]);
+      if (!clientDoc && !rawData) throw new Error('Cliente não encontrado.');
+      activeClientDoc = clientDoc || { id:clientId, ...buildMetadata(rawData), ...extractNativeProfile(rawData) };
+      if (!activeClientDoc.nativeConfigured && rawData) {
+        const inferred = extractNativeProfile(rawData);
+        const metadata = buildMetadata(rawData);
+        const migrationPayload = sanitize({
+          ...metadata,
+          ...inferred,
+          nativeConfigured: true,
+          nativeUpdatedAtIso: new Date().toISOString(),
+          lastSyncReason: 'migração automática do JSON legado'
+        });
+        await setDoc(doc(db, CLIENTS_COLLECTION, clientId), { ...migrationPayload, updatedAt: serverTimestamp() }, { merge:true });
+        activeClientDoc = { id:clientId, ...activeClientDoc, ...migrationPayload };
+        const listIndex = clients.findIndex(item => item.id === clientId);
+        if (listIndex >= 0) clients[listIndex] = { ...clients[listIndex], ...migrationPayload };
+        renderClientList();
+      }
+      activeClientData = rawData ? applyNativeProfile(rawData, activeClientDoc) : null;
+      updateProfileHeader();
+      renderProfileTab();
+      setSyncStatus('Perfil carregado', 'ok');
+      if (updateRoute) routeTo(`cliente/${encodeURIComponent(clientId)}`);
+    } catch (error) {
+      handleCloudError(error);
+      els.profileContent.innerHTML = `<div class="profile-loading">${escapeHtml(error.message)}</div>`;
+    }
+  }
+
+  function openNewClient(updateRoute = true) {
+    creatingClient = true;
+    selectedClientId = '';
+    activeProfileTab = 'strategy';
+    activeClientDoc = {
+      id: '', nativeConfigured: true,
+      clientProfile: { name:'', profile:'', profileStatus:'', birthDate:'', consultingStartDate:'', consultor:'Lucas Gomes Viana', status:'Ativo', notes:'' },
+      investmentPreferences: { allocationNotes:'', liquidityNeeds:'', restrictions:'', riskNotes:'' },
+      allocationPolicy: { effectiveFrom:'', totalWeight:1, targets:[] },
+      goal: {}, assetRegistry: []
+    };
+    activeClientData = null;
+    showPage('profile');
+    updateProfileHeader();
+    renderProfileTab();
+    if (updateRoute) routeTo('novo-cliente');
+  }
+
+  function updateProfileHeader() {
+    const profile = activeClientDoc?.clientProfile || {};
+    const name = profile.name || activeClientDoc?.name || (creatingClient ? 'Novo cliente' : 'Perfil do cliente');
+    const periods = activeClientData ? getPeriods(activeClientData) : (activeClientDoc?.periods || []);
+    els.profileClientName.textContent = name;
+    els.profileClientSubtitle.textContent = creatingClient
+      ? 'Cadastre primeiro os dados permanentes. Depois importe os relatórios mensais.'
+      : `${profile.profile || activeClientDoc?.profile || 'Perfil não informado'} · ${periods.length} relatório(s) disponível(is)`;
+    els.profileHeroMeta.innerHTML = [
+      profile.status || 'Ativo',
+      profile.consultingStartDate ? `Consultoria desde ${formatDate(profile.consultingStartDate)}` : '',
+      activeClientDoc?.nativeConfigured ? 'Dados permanentes nativos' : 'Dados permanentes inferidos do JSON'
+    ].filter(Boolean).map(text => `<span class="profile-hero-chip">${escapeHtml(text)}</span>`).join('');
+    els.profileOpenLatest.disabled = !activeClientData || !periods.length;
+    els.profileNewReport.disabled = creatingClient || !selectedClientId;
+    showPage('profile');
+  }
+
+  function setProfileTab(tab) {
+    activeProfileTab = ['overview','strategy','retirement','assets','reports'].includes(tab) ? tab : 'overview';
+    els.profileTabs.querySelectorAll('[data-profile-tab]').forEach(button => {
+      button.classList.toggle('active', button.dataset.profileTab === activeProfileTab);
+    });
+    renderProfileTab();
+  }
+
+  function renderProfileTab() {
+    if (!activeClientDoc) return;
+    els.profileTabs.querySelectorAll('[data-profile-tab]').forEach(button => {
+      button.classList.toggle('active', button.dataset.profileTab === activeProfileTab);
+    });
+    const renderers = {
+      overview: renderOverviewTab,
+      strategy: renderStrategyTab,
+      retirement: renderRetirementTab,
+      assets: renderAssetsTab,
+      reports: renderReportsTab
+    };
+    els.profileContent.innerHTML = renderers[activeProfileTab]();
+    if (activeProfileTab === 'strategy') updateAllocationTotal();
+  }
+
+  function renderOverviewTab() {
+    const data = activeClientData || {};
+    const profile = activeClientDoc.clientProfile || data.client || {};
+    const summary = summarizeClientData(data);
+    const reportInfo = latestReport(data);
+    const reportSummary = reportInfo.report?.summary || {};
+    const positions = latestPositions(data).slice().sort((a, b) => (Number(b.marketValue) || 0) - (Number(a.marketValue) || 0));
+    const coverage = activeClientDoc.coverage || buildMetadata(data).coverage || {};
+    const targets = activeClientDoc.allocationPolicy?.targets || data.allocationPolicy?.targets || [];
+    return `
+      <div class="profile-grid kpis">
+        <div class="profile-kpi"><span>Último patrimônio</span><strong>${formatMoney(summary.latestWealth)}</strong><small>${summary.latestPositionDate ? `posição de ${formatDate(summary.latestPositionDate)}` : 'sem posição importada'}</small></div>
+        <div class="profile-kpi"><span>Aportes acumulados</span><strong>${formatMoney(summary.cumulativeContributions)}</strong><small>resgates: ${formatMoney(summary.cumulativeWithdrawals)}</small></div>
+        <div class="profile-kpi"><span>Resultado das posições</span><strong>${formatMoney(summary.gainValue)}</strong><small>sobre ${formatMoney(summary.investedValue)} investidos</small></div>
+        <div class="profile-kpi"><span>Rentabilidade desde o início</span><strong>${formatPercent(summary.sinceStartReturn)}</strong><small>proventos acumulados: ${formatMoney(summary.cumulativeIncome)}</small></div>
       </div>
-      <div class="detail-section">
-        <h4>Cadastro</h4>
-        <div class="detail-grid">
-          <div class="detail-item"><span>Nascimento</span><strong>${escapeHtml(formatDate(item.birthDate))}</strong></div>
-          <div class="detail-item"><span>Início da consultoria</span><strong>${escapeHtml(formatDate(item.consultingStartDate))}</strong></div>
-          <div class="detail-item"><span>Último período</span><strong>${escapeHtml(item.latestPeriod || '—')}</strong></div>
-          <div class="detail-item"><span>Última atualização</span><strong>${escapeHtml(formatDate(item.updatedAtIso, true))}</strong></div>
+
+      <div class="profile-two">
+        <div>
+          <section class="profile-panel">
+            <div class="profile-panel-head"><div><h3>Última posição consolidada</h3><p>Ativos da data mais recente disponível no cadastro.</p></div><span class="profile-tag">${summary.currentPositionCount} posições</span></div>
+            ${positions.length ? `<div class="profile-table-wrap"><table class="profile-table"><thead><tr><th>Ativo</th><th>Classe</th><th class="num">Investido</th><th class="num">Atual</th><th class="num">Ganho</th><th class="num">Peso</th></tr></thead><tbody>
+              ${positions.slice(0, 12).map(position => `<tr><td><strong>${escapeHtml(position.assetName || position.assetId || '—')}</strong></td><td>${escapeHtml(position.classLGV || position.sourceCategory || '—')}</td><td class="num">${formatMoney(position.investedValue)}</td><td class="num">${formatMoney(position.marketValue)}</td><td class="num">${formatMoney(position.gainValue)}</td><td class="num">${formatPercent(position.weight, false)}</td></tr>`).join('')}
+            </tbody></table></div>` : '<div class="profile-empty">Nenhuma posição importada.</div>'}
+          </section>
+
+          <section class="profile-panel">
+            <div class="profile-panel-head"><div><h3>Alocação-alvo</h3><p>Política permanente cadastrada para o cliente.</p></div><button class="app-btn" type="button" data-go-tab="strategy">Editar estratégia</button></div>
+            ${targets.length ? `<div class="allocation-bars">${targets.map(target => {
+              const pct = (Number(target.targetWeight) || 0) * 100;
+              return `<div class="allocation-bar-row"><span>${escapeHtml(target.label || target.classLGV || 'Classe')}</span><div class="allocation-track"><div class="allocation-fill" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div><strong>${formatPercent(pct)}</strong></div>`;
+            }).join('')}</div>` : '<div class="profile-empty">Política de alocação ainda não cadastrada.</div>'}
+          </section>
         </div>
-      </div>
-      <div class="detail-section">
-        <h4>Últimos dados importados</h4>
-        <div class="detail-grid">
-          <div class="detail-item"><span>Posições</span><strong>${Number(item.positionsCount || 0)} registros</strong></div>
-          <div class="detail-item"><span>Rentabilidade diária</span><strong>${Number(item.performanceRecords || 0)} registros</strong></div>
-          <div class="detail-item"><span>Início da série</span><strong>${escapeHtml(formatDate(item.performanceStart))}</strong></div>
-          <div class="detail-item"><span>Fim da série</span><strong>${escapeHtml(formatDate(item.performanceEnd))}</strong></div>
+
+        <div>
+          <section class="profile-panel">
+            <div class="profile-panel-head"><div><h3>Resumo do cliente</h3><p>Informações permanentes e cobertura da base.</p></div></div>
+            <div class="profile-summary-list">
+              <div class="profile-summary-row"><span>Perfil de investidor</span><strong>${escapeHtml(profile.profile || '—')}</strong></div>
+              <div class="profile-summary-row"><span>Nascimento</span><strong>${escapeHtml(formatDate(profile.birthDate))}</strong></div>
+              <div class="profile-summary-row"><span>Início da consultoria</span><strong>${escapeHtml(formatDate(profile.consultingStartDate))}</strong></div>
+              <div class="profile-summary-row"><span>Último relatório</span><strong>${escapeHtml(formatPeriod(reportInfo.period))}</strong></div>
+              <div class="profile-summary-row"><span>Relatórios disponíveis</span><strong>${getPeriods(data).length}</strong></div>
+            </div>
+            <div class="profile-tag-list" style="margin-top:14px">${Object.entries(coverage).map(([key, ok]) => `<span class="coverage-chip ${ok ? '' : 'missing'}">${escapeHtml(coverageLabel(key))}</span>`).join('')}</div>
+          </section>
+
+          <section class="profile-panel">
+            <div class="profile-panel-head"><div><h3>Último mês</h3><p>${escapeHtml(formatPeriod(reportInfo.period))}</p></div></div>
+            <div class="profile-summary-list">
+              <div class="profile-summary-row"><span>Rentabilidade</span><strong>${formatPercent(Number(reportSummary.periodReturnBySharePrice) * 100)}</strong></div>
+              <div class="profile-summary-row"><span>Aportes</span><strong>${formatMoney(reportSummary.contributions)}</strong></div>
+              <div class="profile-summary-row"><span>Proventos recebidos</span><strong>${formatMoney(reportSummary.incomeReceivedInMonth)}</strong></div>
+              <div class="profile-summary-row"><span>Resultado financeiro</span><strong>${formatMoney(reportSummary.financialResultPositionAdjusted ?? reportSummary.financialResultDailyPerformance)}</strong></div>
+            </div>
+          </section>
         </div>
-      </div>
-      <div class="detail-section">
-        <h4>Blocos disponíveis</h4>
-        <div class="coverage-list">
-          ${Object.entries(coverage).map(([key, ok]) => `<span class="coverage-chip ${ok ? '' : 'missing'}">${escapeHtml(coverageLabel(key))}</span>`).join('')}
-        </div>
-      </div>
-      ${item.goalConfigured ? `
-      <div class="detail-section">
-        <h4>Aposentadoria</h4>
-        <div class="detail-grid">
-          <div class="detail-item"><span>Idade-alvo</span><strong>${escapeHtml(item.retirementAge || '—')}</strong></div>
-          <div class="detail-item"><span>Idade final</span><strong>${escapeHtml(item.finalAge || '—')}</strong></div>
-          <div class="detail-item"><span>Meta patrimonial</span><strong>${item.targetWealth !== '' ? escapeHtml(formatMoney(item.targetWealth)) : '—'}</strong></div>
-          <div class="detail-item"><span>Renda desejada</span><strong>${item.desiredIncome !== '' ? escapeHtml(formatMoney(item.desiredIncome)) : '—'}</strong></div>
-        </div>
-      </div>` : ''}
-      <div class="detail-section">
-        <h4>Relatórios disponíveis</h4>
-        <div class="period-list">
-          ${periods.length ? periods.map(period => `<button class="period-button" type="button" data-open-period="${escapeHtml(period)}" data-period-client="${escapeHtml(item.id)}">${escapeHtml(period)}</button>`).join('') : '<span class="detail-subtitle">Nenhum período salvo.</span>'}
-        </div>
-      </div>
-      <div class="detail-actions">
-        <button class="app-btn dark" type="button" data-load-client="${escapeHtml(item.id)}">Abrir relatório</button>
-        <button class="app-btn primary" type="button" data-update-client="${escapeHtml(item.id)}">Atualizar / novo mês</button>
-      </div>
-    `;
+      </div>`;
+  }
+
+  function allocationRow(target = {}) {
+    const pct = (Number(target.targetWeight) || 0) * 100;
+    return `<tr class="allocation-row">
+      <td><input class="allocation-label-input" data-allocation-label value="${escapeAttr(target.label || '')}" placeholder="Ex.: Renda Fixa"></td>
+      <td><input data-allocation-class value="${escapeAttr(target.classLGV || '')}" placeholder="renda_fixa"></td>
+      <td><input data-allocation-weight type="number" min="0" max="100" step="0.1" value="${Number.isFinite(pct) ? pct : 0}"></td>
+      <td><button class="row-remove" type="button" data-remove-allocation>Remover</button></td>
+    </tr>`;
+  }
+
+  function renderStrategyTab() {
+    const profile = activeClientDoc.clientProfile || {};
+    const preferences = activeClientDoc.investmentPreferences || {};
+    const policy = activeClientDoc.allocationPolicy || { targets:[] };
+    const targets = Array.isArray(policy.targets) ? policy.targets : [];
+    return `
+      <div class="native-note">Estes dados são permanentes do cliente. Depois de salvos, eles não precisam mais vir em cada JSON mensal e passam a ser aplicados automaticamente na emissão dos relatórios.</div>
+      <section class="profile-panel" style="margin-top:15px">
+        <div class="profile-panel-head"><div><h3>Cadastro e perfil de investidor</h3><p>Identificação, enquadramento e preferências permanentes.</p></div><span class="native-badge ${activeClientDoc.nativeConfigured ? '' : 'pending'}">${activeClientDoc.nativeConfigured ? 'Nativo' : 'Aguardando migração'}</span></div>
+        <form class="native-form" id="profileStrategyForm">
+          <div class="form-grid three">
+            <div class="native-field full"><label>Nome completo</label><input id="nativeName" value="${escapeAttr(profile.name || '')}" required></div>
+            <div class="native-field"><label>Data de nascimento</label><input id="nativeBirthDate" type="date" value="${escapeAttr(profile.birthDate || '')}"></div>
+            <div class="native-field"><label>Início da consultoria</label><input id="nativeConsultingStart" type="date" value="${escapeAttr(profile.consultingStartDate || '')}"></div>
+            <div class="native-field"><label>Status</label><select id="nativeStatus"><option ${profile.status === 'Ativo' ? 'selected' : ''}>Ativo</option><option ${profile.status === 'Inativo' ? 'selected' : ''}>Inativo</option><option ${profile.status === 'Pausado' ? 'selected' : ''}>Pausado</option></select></div>
+            <div class="native-field"><label>Perfil de investidor</label><input id="nativeInvestorProfile" value="${escapeAttr(profile.profile || '')}" placeholder="Conservador, moderado, arrojado..."></div>
+            <div class="native-field"><label>Status do perfil</label><input id="nativeProfileStatus" value="${escapeAttr(profile.profileStatus || '')}" placeholder="Ex.: em revisão"></div>
+            <div class="native-field"><label>Consultor</label><input id="nativeConsultant" value="${escapeAttr(profile.consultor || 'Lucas Gomes Viana')}"></div>
+            <div class="native-field full"><label>Observações do cadastro</label><textarea id="nativeNotes">${escapeHtml(profile.notes || '')}</textarea></div>
+            <div class="native-field full"><label>Preferências de alocação</label><textarea id="nativeAllocationNotes" placeholder="Preferências, prioridades e critérios para novos aportes.">${escapeHtml(preferences.allocationNotes || '')}</textarea></div>
+            <div class="native-field"><label>Necessidade de liquidez</label><textarea id="nativeLiquidityNeeds">${escapeHtml(preferences.liquidityNeeds || '')}</textarea></div>
+            <div class="native-field"><label>Restrições</label><textarea id="nativeRestrictions">${escapeHtml(preferences.restrictions || '')}</textarea></div>
+            <div class="native-field full"><label>Observações de risco</label><textarea id="nativeRiskNotes">${escapeHtml(preferences.riskNotes || '')}</textarea></div>
+          </div>
+        </form>
+      </section>
+
+      <section class="profile-panel">
+        <div class="profile-panel-head"><div><h3>Meta de alocação</h3><p>Percentuais estratégicos permanentes por classe.</p></div><div class="allocation-total" id="allocationTotal">Total: 0%</div></div>
+        <div class="profile-table-wrap"><table class="profile-table"><thead><tr><th>Classe exibida</th><th>Identificador</th><th>Meta (%)</th><th></th></tr></thead><tbody id="allocationRows">
+          ${targets.map(allocationRow).join('') || allocationRow()}
+        </tbody></table></div>
+        <button class="row-add" type="button" data-add-allocation>+ Adicionar classe</button>
+        <div class="native-form-actions"><button class="app-btn primary" type="button" data-save-strategy>Salvar perfil e estratégia</button></div>
+      </section>`;
+  }
+
+  function renderRetirementTab() {
+    const goal = activeClientDoc.goal || {};
+    const sim = goal.initialSimulation || {};
+    return `
+      <div class="native-note">As premissas de aposentadoria passam a pertencer ao perfil do cliente. Os relatórios mensais apenas utilizam estes dados; não precisam repeti-los no JSON de atualização.</div>
+      <section class="profile-panel" style="margin-top:15px">
+        <div class="profile-panel-head"><div><h3>Aposentadoria e metas financeiras</h3><p>Objetivos, prazo, aportes e premissas da simulação.</p></div></div>
+        <form class="native-form" id="retirementForm">
+          <div class="form-grid three">
+            <div class="native-field"><label>Objetivo principal</label><select id="goalPrimary"><option value="income" ${goal.primaryObjective === 'income' || !goal.primaryObjective ? 'selected' : ''}>Renda</option><option value="wealth" ${goal.primaryObjective === 'wealth' ? 'selected' : ''}>Patrimônio</option></select></div>
+            <div class="native-field"><label>Modelo de renda</label><select id="goalIncomeModel"><option value="preservation" ${goal.incomeModel === 'preservation' || !goal.incomeModel ? 'selected' : ''}>Preservação do patrimônio</option><option value="consumption" ${goal.incomeModel === 'consumption' ? 'selected' : ''}>Consumo do patrimônio</option></select></div>
+            <div class="native-field"><label>Idade atual</label><input id="goalCurrentAge" type="number" min="0" step="1" value="${escapeAttr(goal.currentAge ?? '')}"></div>
+            <div class="native-field"><label>Idade de aposentadoria</label><input id="goalRetirementAge" type="number" min="0" step="1" value="${escapeAttr(goal.retirementAge ?? '')}"></div>
+            <div class="native-field"><label>Idade final</label><input id="goalFinalAge" type="number" min="0" step="1" value="${escapeAttr(goal.finalAge ?? '')}"></div>
+            <div class="native-field"><label>Aporte mensal atual</label><input id="goalMonthlyContribution" type="number" min="0" step="0.01" value="${escapeAttr(goal.currentMonthlyContribution ?? '')}"></div>
+            <div class="native-field"><label>Renda mensal desejada (real)</label><input id="goalDesiredIncome" type="number" min="0" step="0.01" value="${escapeAttr(goal.desiredMonthlyIncomeReal ?? '')}"></div>
+            <div class="native-field"><label>Meta patrimonial real</label><input id="goalTargetWealth" type="number" min="0" step="0.01" value="${escapeAttr(goal.targetWealthReal ?? goal.supportingTargetWealthReal ?? '')}"></div>
+            <div class="native-field"><label>Retorno bruto anual (%)</label><input id="goalGrossReturn" type="number" step="0.01" value="${escapeAttr(Number.isFinite(Number(sim.grossReturnAccumulationAnnual)) ? Number(sim.grossReturnAccumulationAnnual) * 100 : '')}"></div>
+            <div class="native-field"><label>Inflação anual (%)</label><input id="goalInflation" type="number" step="0.01" value="${escapeAttr(Number.isFinite(Number(sim.inflationAnnual)) ? Number(sim.inflationAnnual) * 100 : '')}"></div>
+            <div class="native-field"><label>Alíquota estimada (%)</label><input id="goalTax" type="number" step="0.01" value="${escapeAttr(Number.isFinite(Number(sim.estimatedTaxRate)) ? Number(sim.estimatedTaxRate) * 100 : '')}"></div>
+            <div class="native-field full"><label>Observações da meta</label><textarea id="goalNotes">${escapeHtml(goal.notes || '')}</textarea></div>
+          </div>
+          <div class="native-form-actions"><button class="app-btn primary" type="button" data-save-retirement>Salvar aposentadoria e metas</button></div>
+        </form>
+      </section>`;
+  }
+
+  function assetRow(asset = {}) {
+    return `<tr class="asset-row">
+      <td><input data-asset-ticker value="${escapeAttr(asset.ticker || asset.assetId || '')}" placeholder="Ticker"></td>
+      <td><input class="asset-name-input" data-asset-name value="${escapeAttr(asset.assetName || '')}" placeholder="Nome do ativo"></td>
+      <td><input data-asset-class value="${escapeAttr(asset.classLGV || '')}" placeholder="Classe"></td>
+      <td><input data-asset-function value="${escapeAttr(asset.strategicFunction || '')}" placeholder="Função"></td>
+      <td><input data-asset-type value="${escapeAttr(asset.type || asset.sourceType || '')}" placeholder="Tipo"></td>
+      <td><input data-asset-geography value="${escapeAttr(asset.geography || '')}" placeholder="Geografia"></td>
+      <td><button class="row-remove" type="button" data-remove-asset>Remover</button></td>
+    </tr>`;
+  }
+
+  function renderAssetsTab() {
+    const assets = normalizeAssetRegistry(activeClientDoc.assetRegistry);
+    return `
+      <div class="native-note">A estante de ativos funciona como o cadastro permanente dos ativos acompanhados para este cliente. Ela é usada para classificar posições e montar os relatórios mensais.</div>
+      <section class="profile-panel" style="margin-top:15px">
+        <div class="profile-panel-head"><div><h3>Estante de ativos</h3><p>${assets.length} ativo(s) cadastrados.</p></div><button class="row-add" type="button" data-add-asset>+ Adicionar ativo</button></div>
+        <div class="profile-table-wrap"><table class="profile-table"><thead><tr><th>Ticker</th><th>Ativo</th><th>Classe</th><th>Função estratégica</th><th>Tipo</th><th>Geografia</th><th></th></tr></thead><tbody id="assetRows">
+          ${assets.map(assetRow).join('') || assetRow()}
+        </tbody></table></div>
+        <div class="native-form-actions"><button class="app-btn primary" type="button" data-save-assets>Salvar estante de ativos</button></div>
+      </section>`;
+  }
+
+  function renderReportsTab() {
+    const data = activeClientData || {};
+    const periods = getPeriods(data);
+    return `
+      <section class="profile-panel">
+        <div class="profile-panel-head"><div><h3>Relatórios disponíveis</h3><p>Histórico mensal armazenado no cadastro do cliente.</p></div><button class="app-btn primary" type="button" data-new-report>Atualizar / novo mês</button></div>
+        ${periods.length ? `<div class="profile-report-list">${periods.map(period => {
+          const snapshot = data.reportSnapshots?.[period] || {};
+          const summary = snapshot.summary || {};
+          return `<article class="profile-report-item">
+            <div class="profile-report-period">${escapeHtml(formatPeriod(period))}</div>
+            <div class="profile-report-metrics">
+              <span>Patrimônio: <strong>${formatMoney(summary.currentWealthPositionDetail ?? summary.currentWealthDailyPerformance ?? summary.currentWealth)}</strong></span>
+              <span>Rentabilidade: <strong>${formatPercent(Number(summary.periodReturnBySharePrice) * 100)}</strong></span>
+              <span>Aportes: <strong>${formatMoney(summary.contributions)}</strong></span>
+              <span>Proventos: <strong>${formatMoney(summary.incomeReceivedInMonth)}</strong></span>
+            </div>
+            <button class="app-btn" type="button" data-open-report-period="${escapeAttr(period)}">Abrir relatório</button>
+          </article>`;
+        }).join('')}</div>` : '<div class="profile-empty">Nenhum relatório mensal salvo para este cliente.</div>'}
+      </section>`;
+  }
+
+  function numberFromInput(id, divideBy100 = false) {
+    const raw = document.getElementById(id)?.value;
+    if (raw === '' || raw == null) return '';
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return '';
+    return divideBy100 ? value / 100 : value;
+  }
+
+  function collectClientProfile() {
+    return {
+      ...(activeClientDoc.clientProfile || {}),
+      name: document.getElementById('nativeName')?.value.trim() || '',
+      birthDate: document.getElementById('nativeBirthDate')?.value || '',
+      consultingStartDate: document.getElementById('nativeConsultingStart')?.value || '',
+      status: document.getElementById('nativeStatus')?.value || 'Ativo',
+      profile: document.getElementById('nativeInvestorProfile')?.value.trim() || '',
+      profileStatus: document.getElementById('nativeProfileStatus')?.value.trim() || '',
+      consultor: document.getElementById('nativeConsultant')?.value.trim() || 'Lucas Gomes Viana',
+      notes: document.getElementById('nativeNotes')?.value.trim() || ''
+    };
+  }
+
+  function collectPreferences() {
+    return {
+      allocationNotes: document.getElementById('nativeAllocationNotes')?.value.trim() || '',
+      liquidityNeeds: document.getElementById('nativeLiquidityNeeds')?.value.trim() || '',
+      restrictions: document.getElementById('nativeRestrictions')?.value.trim() || '',
+      riskNotes: document.getElementById('nativeRiskNotes')?.value.trim() || ''
+    };
+  }
+
+  function collectAllocationPolicy() {
+    const rows = [...els.profileContent.querySelectorAll('.allocation-row')];
+    const targets = rows.map(row => {
+      const label = row.querySelector('[data-allocation-label]')?.value.trim() || '';
+      const classLGV = row.querySelector('[data-allocation-class]')?.value.trim() || slugify(label).replaceAll('-', '_');
+      const targetWeight = (Number(row.querySelector('[data-allocation-weight]')?.value) || 0) / 100;
+      return { label, classLGV, targetWeight };
+    }).filter(item => item.label || item.classLGV || item.targetWeight);
+    return {
+      ...(activeClientDoc.allocationPolicy || {}),
+      effectiveFrom: activeClientDoc.allocationPolicy?.effectiveFrom || new Date().toISOString().slice(0, 10),
+      totalWeight: targets.reduce((total, target) => total + target.targetWeight, 0),
+      targets
+    };
+  }
+
+  function collectGoal() {
+    const currentAge = numberFromInput('goalCurrentAge');
+    const retirementAge = numberFromInput('goalRetirementAge');
+    const finalAge = numberFromInput('goalFinalAge');
+    const yearsToRetirement = Number.isFinite(Number(currentAge)) && Number.isFinite(Number(retirementAge))
+      ? Number(retirementAge) - Number(currentAge) : '';
+    const retirementDurationYears = Number.isFinite(Number(finalAge)) && Number.isFinite(Number(retirementAge))
+      ? Number(finalAge) - Number(retirementAge) : '';
+    const oldSim = activeClientDoc.goal?.initialSimulation || {};
+    return {
+      ...(activeClientDoc.goal || {}),
+      objectiveType: document.getElementById('goalPrimary')?.value || 'income',
+      primaryObjective: document.getElementById('goalPrimary')?.value || 'income',
+      incomeModel: document.getElementById('goalIncomeModel')?.value || 'preservation',
+      birthDate: activeClientDoc.clientProfile?.birthDate || '',
+      currentAge,
+      retirementAge,
+      finalAge,
+      yearsToRetirement,
+      retirementDurationYears,
+      currentMonthlyContribution: numberFromInput('goalMonthlyContribution'),
+      desiredMonthlyIncomeReal: numberFromInput('goalDesiredIncome'),
+      targetWealthReal: numberFromInput('goalTargetWealth'),
+      supportingTargetWealthReal: numberFromInput('goalTargetWealth'),
+      notes: document.getElementById('goalNotes')?.value.trim() || '',
+      initialSimulation: {
+        ...oldSim,
+        grossReturnAccumulationAnnual: numberFromInput('goalGrossReturn', true),
+        grossReturnRetirementAnnual: numberFromInput('goalGrossReturn', true),
+        inflationAnnual: numberFromInput('goalInflation', true),
+        estimatedTaxRate: numberFromInput('goalTax', true)
+      }
+    };
+  }
+
+  function collectAssets() {
+    return [...els.profileContent.querySelectorAll('.asset-row')].map(row => {
+      const ticker = row.querySelector('[data-asset-ticker]')?.value.trim() || '';
+      const assetName = row.querySelector('[data-asset-name]')?.value.trim() || '';
+      const classLGV = row.querySelector('[data-asset-class]')?.value.trim() || '';
+      const strategicFunction = row.querySelector('[data-asset-function]')?.value.trim() || '';
+      const type = row.querySelector('[data-asset-type]')?.value.trim() || '';
+      const geography = row.querySelector('[data-asset-geography]')?.value.trim() || '';
+      return { assetId:ticker, ticker, assetName, classLGV, strategicFunction, type, geography };
+    }).filter(asset => asset.ticker || asset.assetName);
+  }
+
+  async function persistNativeProfile(reason) {
+    if (!currentUser) throw new Error('Faça login antes de salvar.');
+    const profile = activeClientDoc.clientProfile || {};
+    if (!profile.name?.trim()) throw new Error('Informe o nome completo do cliente.');
+    let clientId = selectedClientId;
+    if (!clientId) {
+      clientId = slugify(profile.name);
+      const existing = await getClientRecord(clientId);
+      if (existing) throw new Error('Já existe um cliente com este identificador. Abra o cadastro existente.');
+      selectedClientId = clientId;
+    }
+    setSyncStatus('Salvando perfil...', 'warn');
+    const minimalData = activeClientData || {
+      schemaVersion:'lgv-invest-native-v1', client:profile, positions:[], dailyPerformance:[],
+      allocationPolicy:activeClientDoc.allocationPolicy || {}, assetRegistry:activeClientDoc.assetRegistry || [],
+      goal:activeClientDoc.goal || {}, investmentPreferences:activeClientDoc.investmentPreferences || {},
+      availableReports:[], reportSnapshots:{}
+    };
+    activeClientData = activeClientData ? applyNativeProfile(activeClientData, { ...activeClientDoc, nativeConfigured:true }) : null;
+    const metadata = buildMetadata(activeClientData || minimalData);
+    const payload = sanitize({
+      ...metadata,
+      nativeConfigured: true,
+      clientProfile: activeClientDoc.clientProfile,
+      investmentPreferences: activeClientDoc.investmentPreferences || {},
+      allocationPolicy: activeClientDoc.allocationPolicy || {},
+      goal: activeClientDoc.goal || {},
+      assetRegistry: normalizeAssetRegistry(activeClientDoc.assetRegistry),
+      nativeUpdatedAtIso: new Date().toISOString(),
+      lastSyncReason: reason
+    });
+    await setDoc(doc(db, CLIENTS_COLLECTION, clientId), { ...payload, updatedAt: serverTimestamp() }, { merge:true });
+    if (activeClientData) {
+      const bytes = new Blob([JSON.stringify(activeClientData)]).size;
+      if (bytes > 900_000) throw new Error('O cadastro ultrapassou o limite seguro desta versão do Firestore.');
+      await setDoc(doc(db, DATA_COLLECTION, clientId), {
+        clientId, data:sanitize(activeClientData), updatedAtIso:new Date().toISOString(), updatedAt:serverTimestamp()
+      }, { merge:true });
+    }
+    creatingClient = false;
+    activeClientDoc = { id:clientId, ...payload, updatedAt:null };
+    await refreshClientList();
+    updateProfileHeader();
+    renderProfileTab();
+    routeTo(`cliente/${encodeURIComponent(clientId)}`, true);
+    setSyncStatus('Perfil salvo', 'ok');
+    window.lgvReportSetStatus?.('Dados permanentes do cliente salvos no sistema.', 'ok');
+  }
+
+  function updateAllocationTotal() {
+    const totalEl = document.getElementById('allocationTotal');
+    if (!totalEl) return;
+    const total = [...els.profileContent.querySelectorAll('[data-allocation-weight]')]
+      .reduce((sumValue, input) => sumValue + (Number(input.value) || 0), 0);
+    totalEl.textContent = `Total: ${total.toLocaleString('pt-BR', { maximumFractionDigits:2 })}%`;
+    totalEl.classList.toggle('bad', Math.abs(total - 100) > 0.01);
   }
 
   async function saveCurrent(reason = 'salvamento manual', silent = false) {
     if (!currentUser) throw new Error('Faça login antes de salvar.');
     const localData = window.lgvGetCurrentReportData?.();
     if (!localData) throw new Error('Importe ou carregue um relatório antes de salvar.');
-    const clientId = getClientId(localData);
+    const inferredId = getClientId(localData);
+    const clientId = selectedClientId || inferredId;
     selectedClientId = clientId;
     if (!silent) setSyncStatus('Salvando...', 'warn');
-    const existing = await getClientData(clientId);
-    const mergedData = mergeReportData(existing, localData);
+    const [existingData, existingDoc] = await Promise.all([getClientData(clientId), getClientRecord(clientId)]);
+    let mergedData = mergeReportData(existingData, localData);
+    const nativeDoc = existingDoc || activeClientDoc || {};
+    const nativeProfile = nativeDoc.nativeConfigured ? nativeFromDoc(nativeDoc) : extractNativeProfile(mergedData);
+    const nativeRecord = {
+      ...nativeDoc,
+      ...nativeProfile,
+      nativeConfigured: true
+    };
+    mergedData = applyNativeProfile(mergedData, nativeRecord);
     const bytes = new Blob([JSON.stringify(mergedData)]).size;
     if (bytes > 900_000) throw new Error('O cadastro ultrapassou o limite seguro desta versão do Firestore.');
     const metadata = buildMetadata(mergedData);
     await setDoc(doc(db, DATA_COLLECTION, clientId), {
       clientId,
-      data: mergedData,
+      data: sanitize(mergedData),
       updatedAtIso: metadata.updatedAtIso,
       updatedAt: serverTimestamp()
-    }, { merge: true });
-    await setDoc(doc(db, CLIENTS_COLLECTION, clientId), {
+    }, { merge:true });
+    const clientPayload = sanitize({
       ...metadata,
-      lastSyncReason: reason,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
+      nativeConfigured: true,
+      clientProfile: nativeProfile.clientProfile,
+      investmentPreferences: nativeProfile.investmentPreferences,
+      allocationPolicy: nativeProfile.allocationPolicy,
+      goal: nativeProfile.goal,
+      assetRegistry: nativeProfile.assetRegistry,
+      nativeUpdatedAtIso: nativeDoc.nativeUpdatedAtIso || new Date().toISOString(),
+      lastSyncReason: reason
+    });
+    await setDoc(doc(db, CLIENTS_COLLECTION, clientId), { ...clientPayload, updatedAt: serverTimestamp() }, { merge:true });
     localStorage.setItem('lgv_reports_cloud_last_client', clientId);
     if (JSON.stringify(mergedData) !== JSON.stringify(localData)) {
       window.lgvLoadReportDataFromCloud?.(mergedData);
     }
     updateReportContext(mergedData);
-    await refreshClientList(clientId);
+    activeClientData = mergedData;
+    activeClientDoc = { id:clientId, ...metadata, ...nativeProfile, nativeConfigured:true };
+    await refreshClientList();
     setSyncStatus(`Salvo às ${new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}`, 'ok');
     return true;
   }
 
-  async function loadClient(clientId, period = '') {
+  async function loadClient(clientId, period = '', showReports = true) {
     if (!currentUser) throw new Error('Faça login antes de carregar clientes.');
     setSyncStatus('Carregando cliente...', 'warn');
-    const data = await getClientData(clientId);
-    if (!data) throw new Error('Os dados completos deste cliente não foram encontrados.');
+    const [rawData, clientDoc] = await Promise.all([getClientData(clientId), getClientRecord(clientId)]);
+    if (!rawData) throw new Error('Os dados completos deste cliente não foram encontrados.');
+    const data = applyNativeProfile(rawData, clientDoc || {});
     selectedClientId = clientId;
+    activeClientDoc = clientDoc;
+    activeClientData = data;
     window.lgvLoadReportDataFromCloud?.(data);
     localStorage.setItem('lgv_reports_cloud_last_client', clientId);
     updateReportContext(data);
-    showPage('reports');
+    if (showReports) {
+      showPage('reports');
+      routeTo('relatorios');
+    }
     if (period) {
       const select = document.getElementById('periodSelect');
       if ([...select.options].some(option => option.value === period)) {
@@ -5363,18 +6062,49 @@ window.lgvReportSetStatus = setStatus;
     setSyncStatus('Cliente carregado', 'ok');
   }
 
-  function startBlankReport() {
-    localStorage.removeItem('lgv_reports_last_json');
-    localStorage.removeItem('lgv_reports_comment_patches');
-    localStorage.removeItem('lgv_reports_action_plan_patches');
-    sessionStorage.setItem('lgv_start_blank_report', '1');
-    location.reload();
+  async function openReportWorkspaceForClient(clientId) {
+    selectedClientId = clientId;
+    const rawData = await getClientData(clientId);
+    const clientDoc = await getClientRecord(clientId);
+    activeClientDoc = clientDoc;
+    if (rawData) {
+      activeClientData = applyNativeProfile(rawData, clientDoc || {});
+      window.lgvLoadReportDataFromCloud?.(activeClientData);
+    } else {
+      activeClientData = null;
+    }
+    updateReportContext(activeClientData);
+    showPage('reports');
+    routeTo('relatorios');
   }
+
+  window.lgvPrepareReportImport = async imported => {
+    if (!currentUser) throw new Error('Faça login antes de importar.');
+    const importedId = imported?.client?.id || imported?.client?.clientId || imported?.clientId || (imported?.client?.name ? slugify(imported.client.name) : '');
+    const clientId = selectedClientId || importedId;
+    if (!clientId) throw new Error('Selecione um cliente no perfil antes de importar um JSON mensal sem cadastro.');
+    const [clientDoc, existingData] = await Promise.all([getClientRecord(clientId), getClientData(clientId)]);
+    if (!clientDoc && !imported?.client?.name) {
+      throw new Error('O JSON não possui cadastro e nenhum perfil nativo foi selecionado.');
+    }
+    selectedClientId = clientId;
+    activeClientDoc = clientDoc || activeClientDoc;
+    let prepared = mergeReportData(existingData, imported);
+    prepared.clientId = clientId;
+    if (clientDoc) prepared = applyNativeProfile(prepared, clientDoc);
+    else {
+      prepared.client = prepared.client || {};
+      prepared.allocationPolicy = prepared.allocationPolicy || {};
+      prepared.goal = prepared.goal || {};
+      prepared.assetRegistry = normalizeAssetRegistry(prepared.assetRegistry);
+    }
+    return prepared;
+  };
 
   window.lgvFirebaseDataChanged = () => {
     const data = window.lgvGetCurrentReportData?.();
     updateReportContext(data);
-    if (data) selectedClientId = getClientId(data);
+    if (data && !selectedClientId) selectedClientId = getClientId(data);
   };
 
   window.lgvFirebaseScheduleSave = (reason = 'alteração automática') => {
@@ -5387,6 +6117,26 @@ window.lgvReportSetStatus = setStatus;
       });
     }, 1400);
   };
+
+  function handleCloudError(error) {
+    console.error(error);
+    setSyncStatus('Erro no Firebase', 'bad');
+    window.lgvReportSetStatus?.(`Firebase: ${error.message}`, 'bad');
+  }
+
+  function handleRoute() {
+    if (!currentUser) return;
+    const hash = decodeURIComponent(window.location.hash || '#clientes');
+    if (hash.startsWith('#cliente/')) {
+      const clientId = hash.slice('#cliente/'.length);
+      if (clientId && clientId !== selectedClientId) openClientProfile(clientId, activeProfileTab, false);
+      else if (clientId) showPage('profile');
+      return;
+    }
+    if (hash === '#novo-cliente') return openNewClient(false);
+    if (hash === '#relatorios') return showPage('reports');
+    navigateClients(false);
+  }
 
   els.loginForm.addEventListener('submit', async event => {
     event.preventDefault();
@@ -5415,34 +6165,90 @@ window.lgvReportSetStatus = setStatus;
   });
 
   els.logout.addEventListener('click', () => signOut(auth).catch(console.error));
-  els.navClients.addEventListener('click', () => showPage('clients'));
-  els.navReports.addEventListener('click', () => showPage('reports'));
-  els.backToClients.addEventListener('click', () => showPage('clients'));
+  els.navClients.addEventListener('click', () => navigateClients());
+  els.navReports.addEventListener('click', () => { showPage('reports'); routeTo('relatorios'); });
+  els.backToClients.addEventListener('click', () => navigateClients());
+  els.profileBack.addEventListener('click', () => navigateClients());
   els.refreshClients.addEventListener('click', () => refreshClientList().catch(handleCloudError));
-  els.newClientReport.addEventListener('click', startBlankReport);
+  els.newClientReport.addEventListener('click', () => openNewClient());
   els.clientSearch.addEventListener('input', renderClientList);
   els.save.addEventListener('click', () => saveCurrent('salvamento manual').catch(handleCloudError));
 
   els.clientsGrid.addEventListener('click', event => {
-    const clientId = event.target.closest('[data-client-open]')?.dataset.clientOpen
-      || event.target.closest('[data-client-id]')?.dataset.clientId;
-    if (clientId) selectClient(clientId);
+    const clientId = event.target.closest('[data-client-open]')?.dataset.clientOpen;
+    if (clientId) openClientProfile(clientId).catch(handleCloudError);
+  });
+  els.clientsGrid.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const clientId = event.target.closest('[data-client-open]')?.dataset.clientOpen;
+    if (clientId) openClientProfile(clientId).catch(handleCloudError);
   });
 
-  els.clientDetail.addEventListener('click', event => {
-    const loadId = event.target.closest('[data-load-client]')?.dataset.loadClient;
-    const updateId = event.target.closest('[data-update-client]')?.dataset.updateClient;
-    const periodButton = event.target.closest('[data-open-period]');
-    if (loadId) loadClient(loadId).catch(handleCloudError);
-    if (updateId) loadClient(updateId).catch(handleCloudError);
-    if (periodButton) loadClient(periodButton.dataset.periodClient, periodButton.dataset.openPeriod).catch(handleCloudError);
+  els.profileTabs.addEventListener('click', event => {
+    const tab = event.target.closest('[data-profile-tab]')?.dataset.profileTab;
+    if (tab) setProfileTab(tab);
   });
 
-  function handleCloudError(error) {
-    console.error(error);
-    setSyncStatus('Erro no Firebase', 'bad');
-    window.lgvReportSetStatus?.(`Firebase: ${error.message}`, 'bad');
-  }
+  els.profileOpenLatest.addEventListener('click', () => {
+    if (selectedClientId) loadClient(selectedClientId).catch(handleCloudError);
+  });
+  els.profileNewReport.addEventListener('click', () => {
+    if (selectedClientId) openReportWorkspaceForClient(selectedClientId).catch(handleCloudError);
+  });
+
+  els.profileContent.addEventListener('input', event => {
+    if (event.target.matches('[data-allocation-weight]')) updateAllocationTotal();
+  });
+
+  els.profileContent.addEventListener('click', event => {
+    const goTab = event.target.closest('[data-go-tab]')?.dataset.goTab;
+    if (goTab) return setProfileTab(goTab);
+    if (event.target.closest('[data-add-allocation]')) {
+      document.getElementById('allocationRows')?.insertAdjacentHTML('beforeend', allocationRow());
+      updateAllocationTotal();
+      return;
+    }
+    const removeAllocation = event.target.closest('[data-remove-allocation]');
+    if (removeAllocation) {
+      removeAllocation.closest('.allocation-row')?.remove();
+      updateAllocationTotal();
+      return;
+    }
+    if (event.target.closest('[data-add-asset]')) {
+      document.getElementById('assetRows')?.insertAdjacentHTML('beforeend', assetRow());
+      return;
+    }
+    const removeAsset = event.target.closest('[data-remove-asset]');
+    if (removeAsset) {
+      removeAsset.closest('.asset-row')?.remove();
+      return;
+    }
+    if (event.target.closest('[data-save-strategy]')) {
+      activeClientDoc.clientProfile = collectClientProfile();
+      activeClientDoc.investmentPreferences = collectPreferences();
+      activeClientDoc.allocationPolicy = collectAllocationPolicy();
+      persistNativeProfile('perfil e estratégia atualizados').catch(handleCloudError);
+      return;
+    }
+    if (event.target.closest('[data-save-retirement]')) {
+      activeClientDoc.goal = collectGoal();
+      persistNativeProfile('aposentadoria e metas atualizadas').catch(handleCloudError);
+      return;
+    }
+    if (event.target.closest('[data-save-assets]')) {
+      activeClientDoc.assetRegistry = collectAssets();
+      persistNativeProfile('estante de ativos atualizada').catch(handleCloudError);
+      return;
+    }
+    if (event.target.closest('[data-new-report]')) {
+      if (selectedClientId) openReportWorkspaceForClient(selectedClientId).catch(handleCloudError);
+      return;
+    }
+    const period = event.target.closest('[data-open-report-period]')?.dataset.openReportPeriod;
+    if (period && selectedClientId) loadClient(selectedClientId, period).catch(handleCloudError);
+  });
+
+  window.addEventListener('popstate', handleRoute);
 
   setPersistence(auth, browserLocalPersistence).catch(console.warn);
 
@@ -5466,19 +6272,18 @@ window.lgvReportSetStatus = setStatus;
     updateReportContext();
 
     try {
-      await refreshClientList(localStorage.getItem('lgv_reports_cloud_last_client') || '');
+      await refreshClientList();
       const localData = window.lgvGetCurrentReportData?.();
       if (localData) {
         const localId = getClientId(localData);
         const exists = clients.some(item => item.id === localId);
-        if (!exists) await saveCurrent('migração dos dados locais', true);
+        if (!exists) {
+          selectedClientId = localId;
+          await saveCurrent('migração dos dados locais', true);
+        }
       }
-      if (sessionStorage.getItem('lgv_start_blank_report') === '1') {
-        sessionStorage.removeItem('lgv_start_blank_report');
-        showPage('reports');
-      } else {
-        showPage('clients');
-      }
+      if (!window.location.hash) routeTo('clientes', true);
+      handleRoute();
     } catch (error) {
       handleCloudError(error);
     }
