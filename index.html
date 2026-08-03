@@ -3251,8 +3251,53 @@ function normalizeIncomeAsset(row) {
   const accumulated = pickFirstNumber(row.accumulated, row.accumulatedAmount, row.totalAccumulated, row.total);
   const classLGV = row.classLGV || row.class || row.category || row.categoria;
   const assetId = row.assetId || row.id || row.codigo || row.ticker;
-  if (!asset || amount === null) return null;
-  return { asset: String(asset), assetId: assetId ? String(assetId) : undefined, amount, accumulated, classLGV };
+  if (!asset || (amount === null && accumulated === null)) return null;
+  return { asset: String(asset), assetId: assetId ? String(assetId) : undefined, amount: amount ?? 0, accumulated, classLGV };
+}
+
+function incomeMonthOrdinal(month) {
+  const match = String(month || '').match(/^(\d{4})-(\d{2})$/);
+  if (!match) return null;
+  return Number(match[1]) * 12 + Number(match[2]) - 1;
+}
+
+function aggregateIncomeEntries(entries, period) {
+  const monthly = new Map();
+  const historicalByAsset = new Map();
+  let firstDate = null;
+  let lastDate = null;
+  (Array.isArray(entries) ? entries : []).forEach(entry => {
+    if (!entry || typeof entry !== 'object') return;
+    const paymentDate = entry.paymentDate || entry.date || entry.receivedDate || entry.dataPagamento || entry.data;
+    const month = String(paymentDate || '').slice(0, 7);
+    const amount = pickFirstNumber(entry.amount, entry.value, entry.total, entry.proceeds, entry.income, entry.valor);
+    const asset = entry.asset || entry.assetName || entry.ticker || entry.name || entry.codigo || entry.ativo;
+    if (!/^\d{4}-\d{2}$/.test(month) || amount === null || !asset) return;
+    if (period && month > period) return;
+    monthly.set(month, (monthly.get(month) || 0) + amount);
+    const key = String(asset);
+    historicalByAsset.set(key, (historicalByAsset.get(key) || 0) + amount);
+    if (!firstDate || paymentDate < firstDate) firstDate = paymentDate;
+    if (!lastDate || paymentDate > lastDate) lastDate = paymentDate;
+  });
+  return {
+    monthlyEvolution: [...monthly.entries()].map(([month, amount]) => ({ month, amount })).sort((a,b) => a.month.localeCompare(b.month)),
+    historicalRanking: [...historicalByAsset.entries()].map(([asset, amount]) => ({ asset, amount })).sort((a,b) => b.amount - a.amount),
+    firstDate,
+    lastDate
+  };
+}
+
+function normalizeIncomeRankingRows(rows, accumulatedMode = false) {
+  if (!Array.isArray(rows)) return [];
+  return rows.map(row => {
+    if (!row || typeof row !== 'object') return null;
+    const asset = row.asset || row.assetName || row.ticker || row.name || row.codigo || row.ativo || row.assetId;
+    const amount = accumulatedMode
+      ? pickFirstNumber(row.accumulated, row.accumulatedAmount, row.totalAccumulated, row.historicalAmount, row.amount, row.value, row.total)
+      : pickFirstNumber(row.amount, row.value, row.total, row.proceeds, row.income, row.monthlyAmount, row.periodAmount);
+    return asset && amount !== null ? { ...row, asset: String(asset), amount } : null;
+  }).filter(Boolean).sort((a,b) => b.amount - a.amount);
 }
 
 function getRawIncomeSource(data, report) {
@@ -3276,10 +3321,12 @@ function normalizeIncomeData(data, report) {
   const src = getRawIncomeSource(data, report);
   if (!src) return null;
   const period = state.selectedPeriod;
+  const entryAggregation = aggregateIncomeEntries(src.entries, period);
   const evolutionRaw = src.monthlyEvolution || src.evolution || src.monthly || src.byMonth || src.months || [];
-  const monthlyEvolution = Array.isArray(evolutionRaw)
+  let monthlyEvolution = Array.isArray(evolutionRaw)
     ? evolutionRaw.map(normalizeMonthValue).filter(Boolean).sort((a,b) => a.month.localeCompare(b.month))
     : [];
+  if (!monthlyEvolution.length) monthlyEvolution = entryAggregation.monthlyEvolution;
 
   const periodFromEvolution = monthlyEvolution.find(item => item.month === period)?.amount;
   const monthlyTotal = pickFirstNumber(
@@ -3292,7 +3339,7 @@ function normalizeIncomeData(data, report) {
     .reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
   const accumulatedTotal = pickFirstNumber(
     src.accumulatedTotal, src.totalAccumulated, src.totalSinceStart, src.total,
-    accumulatedFromEvolution || null
+    monthlyEvolution.length ? accumulatedFromEvolution : null
   ) ?? monthlyTotal;
 
   const assetsRaw = src.byAsset || src.assets || src.monthlyByAsset || src.topPayers || src.payers || [];
@@ -3300,13 +3347,43 @@ function normalizeIncomeData(data, report) {
     ? assetsRaw.map(normalizeIncomeAsset).filter(Boolean).sort((a,b) => b.amount - a.amount)
     : [];
 
+  const periodOrdinal = incomeMonthOrdinal(period);
+  const periodYear = String(period || '').slice(0, 4);
+  const ytdFromEvolution = monthlyEvolution
+    .filter(item => item.month <= period && item.month.startsWith(periodYear + '-'))
+    .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const last12FromEvolution = monthlyEvolution
+    .filter(item => {
+      const ordinal = incomeMonthOrdinal(item.month);
+      return ordinal !== null && periodOrdinal !== null && ordinal <= periodOrdinal && ordinal >= periodOrdinal - 11;
+    })
+    .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
   const realEstateMetrics = getRealEstateIncomeMetrics(data, report, src, byAsset);
-  const ytdTotal = pickFirstNumber(src.ytdTotal, src.yearToDateTotal, src.totalAno);
-  const last12MonthsTotal = pickFirstNumber(src.last12MonthsTotal, src.trailing12MonthsTotal, src.total12m);
+  const ytdTotal = pickFirstNumber(
+    src.ytdTotal, src.yearToDateTotal, src.totalAno,
+    monthlyEvolution.length ? ytdFromEvolution : null
+  );
+  const last12MonthsTotal = pickFirstNumber(
+    src.last12MonthsTotal, src.trailing12MonthsTotal, src.total12m,
+    monthlyEvolution.length ? last12FromEvolution : null
+  );
   const historicalTotal = pickFirstNumber(src.historicalTotal, src.fullHistoryTotal, src.totalHistorico, src.accumulatedTotal, accumulatedTotal);
-  const historyStartDate = src.historyStartDate || src.historicalStartDate || null;
-  const historyEndDate = src.historyEndDate || src.historicalEndDate || report?.periodEnd || null;
-  const rankings = src.rankings || {};
+  const historyStartDate = src.historyStartDate || src.historicalStartDate || entryAggregation.firstDate || null;
+  const historyEndDate = src.historyEndDate || src.historicalEndDate || entryAggregation.lastDate || report?.periodEnd || null;
+
+  const rawRankings = src.rankings && typeof src.rankings === 'object' ? src.rankings : {};
+  const explicitMonthBRL = normalizeIncomeRankingRows(rawRankings?.month?.BRL || rawRankings?.monthly?.BRL || [], false);
+  const explicitHistoryBRL = normalizeIncomeRankingRows(rawRankings?.history?.BRL || rawRankings?.historical?.BRL || [], true);
+  const derivedMonthBRL = normalizeIncomeRankingRows(byAsset, false).filter(row => Math.abs(Number(row.amount) || 0) > 0.000001);
+  const derivedHistoryBRL = normalizeIncomeRankingRows(byAsset, true).filter(row => Math.abs(Number(row.amount) || 0) > 0.000001);
+  const historyFallback = derivedHistoryBRL.length ? derivedHistoryBRL : entryAggregation.historicalRanking;
+  const rankings = {
+    ...rawRankings,
+    month: { ...(rawRankings.month || {}), BRL: explicitMonthBRL.length ? explicitMonthBRL : derivedMonthBRL },
+    history: { ...(rawRankings.history || {}), BRL: explicitHistoryBRL.length ? explicitHistoryBRL : historyFallback }
+  };
+
   const byTypeRaw = src.byType || src.types || src.byNature || src.natures || [];
   const byType = Array.isArray(byTypeRaw) ? byTypeRaw.map(row => {
     if (!row || typeof row !== 'object') return null;
@@ -3317,7 +3394,7 @@ function normalizeIncomeData(data, report) {
   const foreignCurrency = src.foreignCurrency || src.byCurrency || null;
   const reinvestmentAvailability = src.reinvestmentAvailability || src.availableForReinvestment || src.reinvestment || null;
 
-  const hasValue = Math.abs(monthlyTotal) > 0.0001 || Math.abs(accumulatedTotal) > 0.0001 || monthlyEvolution.length || byAsset.length || byType.length || reinvestmentAvailability || Math.abs(realEstateMetrics.realEstateMonthlyTotal || 0) > 0.0001;
+  const hasValue = Math.abs(monthlyTotal) > 0.0001 || Math.abs(accumulatedTotal) > 0.0001 || monthlyEvolution.length || byAsset.length || byType.length || rankings.history.BRL.length || reinvestmentAvailability || Math.abs(realEstateMetrics.realEstateMonthlyTotal || 0) > 0.0001;
   if (!hasValue) return null;
   return { period, monthlyTotal, accumulatedTotal, historicalTotal, historyStartDate, historyEndDate, ytdTotal, last12MonthsTotal, monthlyEvolution, byAsset, byType, rankings, foreignCurrency, reinvestmentAvailability, ...realEstateMetrics };
 }
@@ -3406,8 +3483,10 @@ function renderForeignIncomeNote(income) {
 
 function renderIncomeSection(income, showSectionTitle = true) {
   if (!income) return '';
-  const monthRanking = income?.rankings?.month?.BRL || income.byAsset || [];
-  const historyRanking = income?.rankings?.history?.BRL || [];
+  const monthRanking = income?.rankings?.month?.BRL?.length ? income.rankings.month.BRL : (income.byAsset || []);
+  const historyRanking = income?.rankings?.history?.BRL?.length
+    ? income.rankings.history.BRL
+    : normalizeIncomeRankingRows(income.byAsset || [], true);
   const hasRealEstate = Math.abs(income.realEstateMonthlyTotal || 0) > 0.0001 || Math.abs(income.realEstateValue || 0) > 0.0001;
   return `
       ${showSectionTitle ? '<div class="section-title">Proventos recebidos</div>' : ''}
