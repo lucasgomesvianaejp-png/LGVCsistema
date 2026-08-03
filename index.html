@@ -1430,7 +1430,9 @@
           </div>
           <div class="profile-hero-actions">
             <button class="app-btn" id="profileOpenLatest" type="button" disabled>Abrir último relatório</button>
-            <button class="app-btn primary" id="profileNewReport" type="button" disabled>Atualizar / novo mês</button>
+            <button class="app-btn primary" id="profileNewReport" type="button" disabled>Importar atualização JSON</button>
+            <input id="profileUpdateFile" type="file" accept="application/json,.json" hidden>
+            <input id="profileRestoreFile" type="file" accept="application/json,.json" hidden>
           </div>
         </div>
 
@@ -1476,25 +1478,30 @@
             <section class="control-panel">
               <div class="control-grid">
                 <div class="dropzone">
-                  <h2>Importar relatório tratado</h2>
-                  <p>Use o JSON mensal tratado. Cadastro, perfil, política de alocação, aposentadoria e estante de ativos são preenchidos automaticamente pelo perfil nativo do cliente. Arquivos antigos completos continuam compatíveis.</p>
+                  <h2>Emissão do relatório</h2>
+                  <p>As atualizações de investimento agora são importadas dentro do cadastro de cada cliente. Nesta área, selecione o cliente e o mês para emitir o relatório, o comentário ou o plano de ação.</p>
                   <div class="actions">
-                    <label class="btn" for="jsonFile">Importar relatório</label>
-                    <input id="jsonFile" type="file" accept="application/json,.json" />
+                    <button class="btn" id="openSelectedClientProfile" type="button">Atualizar dados do cliente</button>
+                    <input id="jsonFile" type="file" accept="application/json,.json" hidden />
                     <label class="btn ghost" for="commentFile">Importar comentário</label>
                     <input id="commentFile" type="file" accept="application/json,.json" />
                     <label class="btn ghost" for="actionPlanFile">Importar plano de ação</label>
                     <input id="actionPlanFile" type="file" accept="application/json,.json" />
-                    <button class="btn ghost" id="loadSample">Carregar exemplo Anacleta</button>
+                    <button class="btn ghost" id="loadSample" type="button" hidden>Carregar exemplo</button>
                     <button class="btn secondary" id="clearData">Limpar área de emissão</button>
                   </div>
                   <div class="status-row" id="importStatus">
-                    <span class="pill warn">Aguardando importação</span>
+                    <span class="pill warn">Selecione um cliente e um mês</span>
                   </div>
                 </div>
 
                 <div class="settings-card">
                   <h3>Configuração do relatório</h3>
+                  <label for="reportClientSelect">Cliente</label>
+                  <select id="reportClientSelect" class="select-box">
+                    <option value="">Selecione um cliente</option>
+                  </select>
+
                   <label for="periodSelect">Mês disponível</label>
                   <select id="periodSelect" class="select-box" disabled>
                     <option>Importe um JSON</option>
@@ -1774,7 +1781,8 @@ function getReport(period = state.selectedPeriod) {
 }
 
 function getAvailablePeriods() {
-  return state.data?.availableReports?.map(r => r.period) || Object.keys(state.data?.reportSnapshots || {});
+  const periods = state.data?.availableReports?.map(r => r.period) || Object.keys(state.data?.reportSnapshots || {});
+  return [...new Set((periods || []).filter(Boolean))].sort((a,b) => b.localeCompare(a));
 }
 
 function loadData(data) {
@@ -2270,7 +2278,7 @@ async function readFile(file) {
   const data = typeof window.lgvPrepareReportImport === 'function'
     ? await window.lgvPrepareReportImport(imported)
     : imported;
-  loadData(data);
+  return loadData(data);
 }
 
 async function fetchJson(url) {
@@ -5108,6 +5116,22 @@ applyPrintPageSize();
 updateActionPlanControls();
 
 window.lgvGetCurrentReportData = () => state.data;
+window.lgvReadReportFile = readFile;
+window.lgvClearReportWorkspaceData = () => {
+  state.data = null;
+  state.selectedPeriod = null;
+  localStorage.removeItem('lgv_reports_last_json');
+  const periodSelect = document.getElementById('periodSelect');
+  if (periodSelect) {
+    periodSelect.innerHTML = '<option value="">Selecione um cliente</option>';
+    periodSelect.disabled = true;
+  }
+  const root = document.getElementById('reportRoot');
+  if (root) root.innerHTML = '<div class="empty-state"><h2>Nenhum relatório carregado</h2><p>Selecione um cliente e um mês para emitir.</p></div>';
+  document.getElementById('reportToolbar')?.classList.remove('visible');
+  document.getElementById('headerMeta').innerHTML = '<strong>Nenhum cliente carregado</strong>Selecione um cliente para iniciar.';
+  setStatus('Selecione um cliente e um mês', 'warn');
+};
 window.lgvLoadReportDataFromCloud = (data) => {
   window.__lgvLoadingFromCloud = true;
   try { return loadData(data); }
@@ -5116,11 +5140,8 @@ window.lgvLoadReportDataFromCloud = (data) => {
 window.lgvReportSetStatus = setStatus;
 
 (function boot(){
-  const cached = localStorage.getItem('lgv_reports_last_json');
-  if (cached) {
-    try { loadData(JSON.parse(cached)); }
-    catch { localStorage.removeItem('lgv_reports_last_json'); }
-  }
+  // A área de emissão começa vazia. O relatório somente é carregado após a seleção explícita de um cliente.
+  localStorage.removeItem('lgv_reports_last_json');
 })();
 </script>
 
@@ -5191,6 +5212,10 @@ window.lgvReportSetStatus = setStatus;
     profileHeroMeta: document.getElementById('profileHeroMeta'),
     profileOpenLatest: document.getElementById('profileOpenLatest'),
     profileNewReport: document.getElementById('profileNewReport'),
+    profileUpdateFile: document.getElementById('profileUpdateFile'),
+    profileRestoreFile: document.getElementById('profileRestoreFile'),
+    reportClientSelect: document.getElementById('reportClientSelect'),
+    openSelectedClientProfile: document.getElementById('openSelectedClientProfile'),
     profileTabs: document.getElementById('profileTabs'),
     profileContent: document.getElementById('profileContent')
   };
@@ -5569,6 +5594,16 @@ window.lgvReportSetStatus = setStatus;
     return snap.exists() ? snap.data()?.data || null : null;
   }
 
+  function hydrateReportClientSelect() {
+    if (!els.reportClientSelect) return;
+    const current = selectedClientId || els.reportClientSelect.value || '';
+    els.reportClientSelect.innerHTML = '<option value="">Selecione um cliente</option>' + clients.map(item => {
+      const name = item.name || item.clientProfile?.name || item.id;
+      return `<option value="${escapeAttr(item.id)}">${escapeHtml(name)}</option>`;
+    }).join('');
+    if (current && clients.some(item => item.id === current)) els.reportClientSelect.value = current;
+  }
+
   async function refreshClientList() {
     if (!currentUser) return [];
     setSyncStatus('Atualizando clientes...', 'warn');
@@ -5578,6 +5613,7 @@ window.lgvReportSetStatus = setStatus;
       .sort((a, b) => String(a.name || a.clientProfile?.name || a.id).localeCompare(String(b.name || b.clientProfile?.name || b.id), 'pt-BR'));
     renderClientList();
     updateStats();
+    hydrateReportClientSelect();
     setSyncStatus('Dados sincronizados', 'ok');
     els.clientListStatus.textContent = `${clients.length} cliente(s)`;
     return clients;
@@ -5915,7 +5951,13 @@ window.lgvReportSetStatus = setStatus;
     const periods = getPeriods(data);
     return `
       <section class="profile-panel">
-        <div class="profile-panel-head"><div><h3>Relatórios disponíveis</h3><p>Histórico mensal armazenado no cadastro do cliente.</p></div><button class="app-btn primary" type="button" data-new-report>Atualizar / novo mês</button></div>
+        <div class="profile-panel-head">
+          <div><h3>Relatórios disponíveis</h3><p>Histórico mensal armazenado exclusivamente neste cadastro.</p></div>
+          <div class="page-actions">
+            <button class="app-btn" type="button" data-restore-client>Restaurar base completa</button>
+            <button class="app-btn primary" type="button" data-new-report>Importar atualização JSON</button>
+          </div>
+        </div>
         ${periods.length ? `<div class="profile-report-list">${periods.map(period => {
           const snapshot = data.reportSnapshots?.[period] || {};
           const summary = snapshot.summary || {};
@@ -6090,8 +6132,11 @@ window.lgvReportSetStatus = setStatus;
     const localData = window.lgvGetCurrentReportData?.();
     if (!localData) throw new Error('Importe ou carregue um relatório antes de salvar.');
     const inferredId = getClientId(localData);
-    const clientId = selectedClientId || inferredId;
-    selectedClientId = clientId;
+    if (!selectedClientId) throw new Error('Selecione um cliente antes de salvar o relatório.');
+    const clientId = selectedClientId;
+    if (inferredId && inferredId !== clientId) {
+      throw new Error(`Bloqueado: o relatório carregado pertence a ${inferredId}, mas o cliente selecionado é ${clientId}.`);
+    }
     if (!silent) setSyncStatus('Salvando...', 'warn');
     const [existingData, existingDoc] = await Promise.all([getClientData(clientId), getClientRecord(clientId)]);
     let mergedData = mergeReportData(existingData, localData);
@@ -6145,6 +6190,7 @@ window.lgvReportSetStatus = setStatus;
     selectedClientId = clientId;
     activeClientDoc = clientDoc;
     activeClientData = data;
+    hydrateReportClientSelect();
     window.lgvLoadReportDataFromCloud?.(data);
     localStorage.setItem('lgv_reports_cloud_last_client', clientId);
     updateReportContext(data);
@@ -6167,11 +6213,13 @@ window.lgvReportSetStatus = setStatus;
     const rawData = await getClientData(clientId);
     const clientDoc = await getClientRecord(clientId);
     activeClientDoc = clientDoc;
+    hydrateReportClientSelect();
     if (rawData) {
       activeClientData = applyNativeProfile(rawData, clientDoc || {});
       window.lgvLoadReportDataFromCloud?.(activeClientData);
     } else {
       activeClientData = null;
+      window.lgvClearReportWorkspaceData?.();
     }
     updateReportContext(activeClientData);
     showPage('reports');
@@ -6180,26 +6228,65 @@ window.lgvReportSetStatus = setStatus;
 
   window.lgvPrepareReportImport = async imported => {
     if (!currentUser) throw new Error('Faça login antes de importar.');
+    if (!selectedClientId) throw new Error('Abra primeiro o cadastro do cliente e use Importar atualização JSON.');
     const importedId = imported?.client?.id || imported?.client?.clientId || imported?.clientId || (imported?.client?.name ? slugify(imported.client.name) : '');
-    const clientId = selectedClientId || importedId;
-    if (!clientId) throw new Error('Selecione um cliente no perfil antes de importar um JSON mensal sem cadastro.');
+    const clientId = selectedClientId;
     const [clientDoc, existingData] = await Promise.all([getClientRecord(clientId), getClientData(clientId)]);
-    if (!clientDoc && !imported?.client?.name) {
-      throw new Error('O JSON não possui cadastro e nenhum perfil nativo foi selecionado.');
+    if (!clientDoc) throw new Error('O cliente selecionado não possui cadastro nativo no sistema.');
+    const selectedName = clientDoc?.clientProfile?.name || clientDoc?.name || clientId;
+    const importedName = imported?.client?.name || imported?.name || importedId || 'cliente não identificado';
+    if (importedId && importedId !== clientId) {
+      throw new Error(`Importação bloqueada: o JSON é de ${importedName}, mas o cadastro aberto é de ${selectedName}.`);
     }
     selectedClientId = clientId;
-    activeClientDoc = clientDoc || activeClientDoc;
+    activeClientDoc = clientDoc;
     let prepared = mergeReportData(existingData, imported);
     prepared.clientId = clientId;
-    if (clientDoc) prepared = applyNativeProfile(prepared, clientDoc);
-    else {
-      prepared.client = prepared.client || {};
-      prepared.allocationPolicy = prepared.allocationPolicy || {};
-      prepared.goal = prepared.goal || {};
-      prepared.assetRegistry = normalizeAssetRegistry(prepared.assetRegistry);
-    }
+    prepared = applyNativeProfile(prepared, clientDoc);
     return prepared;
   };
+
+  async function restoreClientBaseFromFile(file) {
+    if (!currentUser) throw new Error('Faça login antes de restaurar.');
+    if (!selectedClientId) throw new Error('Abra primeiro o cadastro do cliente.');
+    const imported = JSON.parse(await file.text());
+    const importedId = getClientId(imported);
+    const clientId = selectedClientId;
+    const clientDoc = await getClientRecord(clientId);
+    if (!clientDoc) throw new Error('Cadastro do cliente não encontrado.');
+    const selectedName = clientDoc?.clientProfile?.name || clientDoc?.name || clientId;
+    const importedName = imported?.client?.name || imported?.name || importedId || 'cliente não identificado';
+    if (importedId && importedId !== clientId) {
+      throw new Error(`Restauração bloqueada: o JSON é de ${importedName}, mas o cadastro aberto é de ${selectedName}.`);
+    }
+    const confirmed = window.confirm(`Substituir integralmente a base de ${selectedName} pelo JSON selecionado? Esta ação serve para corrigir uma base corrompida.`);
+    if (!confirmed) return false;
+    let restored = applyNativeProfile(imported, clientDoc);
+    restored.clientId = clientId;
+    const bytes = new Blob([JSON.stringify(restored)]).size;
+    if (bytes > 900_000) throw new Error('O cadastro ultrapassou o limite seguro desta versão do Firestore.');
+    const metadata = buildMetadata(restored);
+    await setDoc(doc(db, DATA_COLLECTION, clientId), {
+      clientId,
+      data: sanitize(restored),
+      updatedAtIso: metadata.updatedAtIso,
+      updatedAt: serverTimestamp()
+    });
+    await setDoc(doc(db, CLIENTS_COLLECTION, clientId), {
+      ...sanitize(metadata),
+      lastSyncReason: 'restauração integral da base',
+      updatedAt: serverTimestamp()
+    }, { merge:true });
+    activeClientData = restored;
+    activeClientDoc = { ...clientDoc, ...metadata };
+    window.lgvLoadReportDataFromCloud?.(restored);
+    await refreshClientList();
+    updateProfileHeader();
+    setProfileTab('reports');
+    setSyncStatus('Base restaurada', 'ok');
+    window.lgvReportSetStatus?.(`Base de ${selectedName} restaurada com sucesso.`, 'ok');
+    return true;
+  }
 
   window.lgvFirebaseDataChanged = () => {
     const data = window.lgvGetCurrentReportData?.();
@@ -6266,7 +6353,7 @@ window.lgvReportSetStatus = setStatus;
 
   els.logout.addEventListener('click', () => signOut(auth).catch(console.error));
   els.navClients.addEventListener('click', () => navigateClients());
-  els.navReports.addEventListener('click', () => { showPage('reports'); routeTo('relatorios'); });
+  els.navReports.addEventListener('click', () => { hydrateReportClientSelect(); showPage('reports'); routeTo('relatorios'); });
   els.backToClients.addEventListener('click', () => navigateClients());
   els.profileBack.addEventListener('click', () => navigateClients());
   els.refreshClients.addEventListener('click', () => refreshClientList().catch(handleCloudError));
@@ -6293,7 +6380,51 @@ window.lgvReportSetStatus = setStatus;
     if (selectedClientId) loadClient(selectedClientId).catch(handleCloudError);
   });
   els.profileNewReport.addEventListener('click', () => {
-    if (selectedClientId) openReportWorkspaceForClient(selectedClientId).catch(handleCloudError);
+    if (!selectedClientId) return;
+    els.profileUpdateFile.value = '';
+    els.profileUpdateFile.click();
+  });
+
+  els.profileUpdateFile.addEventListener('change', async event => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      setSyncStatus('Importando atualização...', 'warn');
+      const ok = await window.lgvReadReportFile?.(file);
+      if (ok !== false) {
+        clearTimeout(saveTimer);
+        await saveCurrent('atualização JSON importada', false);
+        await loadClient(selectedClientId, '', true);
+        setSyncStatus('Atualização salva no cliente', 'ok');
+      }
+    } catch (error) { handleCloudError(error); }
+    finally { event.target.value = ''; }
+  });
+
+  els.profileRestoreFile.addEventListener('change', async event => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try { await restoreClientBaseFromFile(file); }
+    catch (error) { handleCloudError(error); }
+    finally { event.target.value = ''; }
+  });
+
+  els.reportClientSelect.addEventListener('change', event => {
+    const clientId = event.target.value;
+    if (!clientId) {
+      selectedClientId = '';
+      activeClientDoc = null;
+      activeClientData = null;
+      window.lgvClearReportWorkspaceData?.();
+      updateReportContext(null);
+      return;
+    }
+    openReportWorkspaceForClient(clientId).catch(handleCloudError);
+  });
+
+  els.openSelectedClientProfile.addEventListener('click', () => {
+    if (!selectedClientId) return window.lgvReportSetStatus?.('Selecione um cliente antes de atualizar os dados.', 'warn');
+    openClientProfile(selectedClientId, 'reports').catch(handleCloudError);
   });
 
   els.profileContent.addEventListener('input', event => {
@@ -6341,7 +6472,17 @@ window.lgvReportSetStatus = setStatus;
       return;
     }
     if (event.target.closest('[data-new-report]')) {
-      if (selectedClientId) openReportWorkspaceForClient(selectedClientId).catch(handleCloudError);
+      if (selectedClientId) {
+        els.profileUpdateFile.value = '';
+        els.profileUpdateFile.click();
+      }
+      return;
+    }
+    if (event.target.closest('[data-restore-client]')) {
+      if (selectedClientId) {
+        els.profileRestoreFile.value = '';
+        els.profileRestoreFile.click();
+      }
       return;
     }
     const period = event.target.closest('[data-open-report-period]')?.dataset.openReportPeriod;
@@ -6373,15 +6514,7 @@ window.lgvReportSetStatus = setStatus;
 
     try {
       await refreshClientList();
-      const localData = window.lgvGetCurrentReportData?.();
-      if (localData) {
-        const localId = getClientId(localData);
-        const exists = clients.some(item => item.id === localId);
-        if (!exists) {
-          selectedClientId = localId;
-          await saveCurrent('migração dos dados locais', true);
-        }
-      }
+      window.lgvClearReportWorkspaceData?.();
       if (!window.location.hash) routeTo('clientes', true);
       handleRoute();
     } catch (error) {
