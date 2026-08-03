@@ -959,6 +959,11 @@
     }
     .reinvestment-banner .big { font-size:24px; font-weight:950; letter-spacing:-.025em; }
     .reinvestment-banner .meta { color:#655e55; font-size:12px; line-height:1.45; }
+    .reinvestment-breakdown { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:10px; }
+    .reinvestment-breakdown div { border:1px solid #efdcb9; border-radius:10px; background:rgba(255,255,255,.72); padding:7px 8px; }
+    .reinvestment-breakdown span { display:block; color:#776d61; font-size:9px; font-weight:850; letter-spacing:.025em; text-transform:uppercase; }
+    .reinvestment-breakdown strong { display:block; margin-top:3px; font-size:12.5px; color:#2d2a26; }
+    .cash-window-profile { border-color:#efd8ac !important; background:#fffaf0 !important; }
     .income-type-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-top:10px; }
     .income-type-card { border:1px solid #eee3d4; border-radius:12px; background:#fff; padding:9px 10px; }
     .income-type-card span { display:block; color:#777; font-size:9.5px; text-transform:uppercase; font-weight:850; letter-spacing:.035em; }
@@ -2013,10 +2018,12 @@ function normalizeActionPlanObject(item, fallbackPeriod = null) {
   }).filter(Boolean) : [];
 
   const fundingRaw = item.funding || item.resources || item.recursos || {};
-  const availableProceeds = pickFirstNumber(
+  const cashWindow = getReinvestmentCashWindowForPeriod(state.data, fallbackPeriod || item.referencePeriod || item.period || state.selectedPeriod);
+  const explicitAvailableProceeds = pickFirstNumber(
     fundingRaw.availableProceeds, fundingRaw.proceeds, fundingRaw.proventosDisponiveis,
     fundingRaw.availableProceedsBRL, item.availableProceeds
-  ) ?? 0;
+  );
+  const availableProceeds = explicitAvailableProceeds ?? (cashWindow ? Number(cashWindow.closingAvailableBalanceBRL || 0) : 0);
   const externalContribution = pickFirstNumber(
     fundingRaw.externalContribution, fundingRaw.contribution, fundingRaw.aporteExterno,
     item.externalContribution
@@ -2029,14 +2036,15 @@ function normalizeActionPlanObject(item, fallbackPeriod = null) {
     title: item.title || 'Plano de ação',
     referencePeriod: item.referencePeriod || item.period || fallbackPeriod || state.selectedPeriod,
     generatedAt: item.generatedAt || item.date || null,
-    resourceCutoff: item.resourceCutoff || item.proceedsCutoff || item.cutoffDate || null,
+    resourceCutoff: item.resourceCutoff || item.proceedsCutoff || item.cutoffDate || cashWindow?.cutoffDate || null,
     body: typeof body === 'string' ? body : '',
     funding: {
       availableProceeds,
       externalContribution,
       otherResources,
       totalAvailable,
-      availableProceedsByCurrency: fundingRaw.availableProceedsByCurrency || fundingRaw.byCurrency || null
+      availableProceedsByCurrency: fundingRaw.availableProceedsByCurrency || fundingRaw.byCurrency || { BRL: availableProceeds },
+      cashWindowId: fundingRaw.cashWindowId || cashWindow?.windowId || null
     },
     allocations,
     observations: item.observations || item.notes || item.observacoes || ''
@@ -3261,6 +3269,81 @@ function incomeMonthOrdinal(month) {
   return Number(match[1]) * 12 + Number(match[2]) - 1;
 }
 
+function normalizeReinvestmentCashWindow(row) {
+  if (!row || typeof row !== 'object') return null;
+  const cutoffDate = row.cutoffDate || row.endInclusive || row.windowEnd || row.asOf || null;
+  const previousCutoffDate = row.previousCutoffDate || row.startExclusive || row.windowStart || null;
+  const closingAvailableBalanceBRL = pickFirstNumber(
+    row.closingAvailableBalanceBRL, row.availableBRL, row.availableProceedsBRL,
+    row.closingBalanceBRL, row.remainingAfterExecutionBRL
+  );
+  if (!cutoffDate && closingAvailableBalanceBRL === null) return null;
+  return {
+    ...row,
+    windowId: row.windowId || [previousCutoffDate, cutoffDate].filter(Boolean).join('__'),
+    previousCutoffDate,
+    cutoffDate,
+    openingBalanceBRL: pickFirstNumber(row.openingBalanceBRL, row.openingBRL) ?? 0,
+    previousPlanExecutedBRL: pickFirstNumber(row.previousPlanExecutedBRL, row.consumedByPreviousPlanBRL, row.priorPlanExecutedBRL) ?? 0,
+    receiptsInWindowBRL: pickFirstNumber(row.receiptsInWindowBRL, row.receiptsBRL, row.receivedBRL) ?? 0,
+    manualAdjustmentsBRL: pickFirstNumber(row.manualAdjustmentsBRL, row.adjustmentsBRL) ?? 0,
+    closingAvailableBalanceBRL: closingAvailableBalanceBRL ?? 0,
+    linkedReportPeriod: row.linkedReportPeriod || row.reportPeriod || null,
+    status: row.status || 'closed'
+  };
+}
+
+function getReinvestmentCashWindows(data) {
+  const raw = data?.reinvestmentCashWindows || data?.cashWindows || data?.proceedsCashWindows || [];
+  return (Array.isArray(raw) ? raw : Object.values(raw || {}))
+    .map(normalizeReinvestmentCashWindow)
+    .filter(Boolean)
+    .sort((a,b) => String(a.cutoffDate || '').localeCompare(String(b.cutoffDate || '')));
+}
+
+function getReinvestmentCashWindowForPeriod(data, period = state.selectedPeriod) {
+  const windows = getReinvestmentCashWindows(data);
+  if (!windows.length) return null;
+  const exact = windows.filter(row => row.linkedReportPeriod === period);
+  if (exact.length) return exact.at(-1);
+  return windows.at(-1);
+}
+
+function cashWindowToAvailability(windowRow) {
+  const row = normalizeReinvestmentCashWindow(windowRow);
+  if (!row) return null;
+  return {
+    source: 'reinvestment_cash_window',
+    windowId: row.windowId,
+    asOf: row.cutoffDate,
+    previousCutoffDate: row.previousCutoffDate,
+    openingBalanceBRL: row.openingBalanceBRL,
+    previousPlanExecutedBRL: row.previousPlanExecutedBRL,
+    receiptsInWindowBRL: row.receiptsInWindowBRL,
+    manualAdjustmentsBRL: row.manualAdjustmentsBRL,
+    closingAvailableBalanceBRL: row.closingAvailableBalanceBRL,
+    availableBRL: row.closingAvailableBalanceBRL,
+    availableByCurrency: { BRL: row.closingAvailableBalanceBRL },
+    linkedReportPeriod: row.linkedReportPeriod,
+    boundaryRule: row.boundaryRule || 'start_exclusive_end_inclusive',
+    status: row.status
+  };
+}
+
+function hasExplicitReinvestmentBRL(reinv) {
+  if (!reinv || typeof reinv !== 'object') return false;
+  const values = [reinv.brlTotalForClientConversation, reinv.availableByCurrency?.BRL, reinv.availableBRL, reinv.closingAvailableBalanceBRL];
+  return values.some(value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)));
+}
+
+function getAvailableReinvestmentCashBRL(data, period = state.selectedPeriod) {
+  const windowRow = getReinvestmentCashWindowForPeriod(data, period);
+  return windowRow ? Number(windowRow.closingAvailableBalanceBRL || 0) : 0;
+}
+
+window.lgvGetReinvestmentCashWindowForPeriod = getReinvestmentCashWindowForPeriod;
+window.lgvGetAvailableReinvestmentCashBRL = getAvailableReinvestmentCashBRL;
+
 function aggregateIncomeEntries(entries, period) {
   const monthly = new Map();
   const historicalByAsset = new Map();
@@ -3392,7 +3475,11 @@ function normalizeIncomeData(data, report) {
     return type && amount !== null ? { type:String(type), amount } : null;
   }).filter(Boolean).sort((a,b) => b.amount - a.amount) : [];
   const foreignCurrency = src.foreignCurrency || src.byCurrency || null;
-  const reinvestmentAvailability = src.reinvestmentAvailability || src.availableForReinvestment || src.reinvestment || null;
+  const explicitReinvestmentAvailability = src.reinvestmentAvailability || src.availableForReinvestment || src.reinvestment || null;
+  const cashWindowAvailability = cashWindowToAvailability(getReinvestmentCashWindowForPeriod(data, period));
+  const reinvestmentAvailability = hasExplicitReinvestmentBRL(explicitReinvestmentAvailability)
+    ? explicitReinvestmentAvailability
+    : (cashWindowAvailability || explicitReinvestmentAvailability);
 
   const hasValue = Math.abs(monthlyTotal) > 0.0001 || Math.abs(accumulatedTotal) > 0.0001 || monthlyEvolution.length || byAsset.length || byType.length || rankings.history.BRL.length || reinvestmentAvailability || Math.abs(realEstateMetrics.realEstateMonthlyTotal || 0) > 0.0001;
   if (!hasValue) return null;
@@ -3448,20 +3535,38 @@ function renderIncomeTypeCards(rows) {
 function renderReinvestmentAvailability(income) {
   const reinv = income?.reinvestmentAvailability;
   if (!reinv) return '';
-  const availableBRL = pickFirstNumber(reinv.brlTotalForClientConversation, reinv.availableByCurrency?.BRL, reinv.availableBRL) ?? 0;
-  const availableUSD = pickFirstNumber(reinv.availableByCurrency?.USD, reinv.availableUSD);
+  const availableBRL = pickFirstNumber(
+    reinv.closingAvailableBalanceBRL,
+    reinv.brlTotalForClientConversation,
+    reinv.availableByCurrency?.BRL,
+    reinv.availableBRL
+  ) ?? 0;
+  const openingBRL = pickFirstNumber(reinv.openingBalanceBRL) ?? 0;
+  const previousPlanExecutedBRL = pickFirstNumber(reinv.previousPlanExecutedBRL, reinv.consumedByPreviousPlanBRL) ?? 0;
+  const receiptsBRL = pickFirstNumber(reinv.receiptsInWindowBRL) ?? 0;
+  const adjustmentsBRL = pickFirstNumber(reinv.manualAdjustmentsBRL) ?? 0;
   const asOf = reinv.asOf ? fmt.date(reinv.asOf) : '—';
+  const previousCutoff = reinv.previousCutoffDate ? fmt.date(reinv.previousCutoffDate) : '—';
+  const windowLabel = reinv.previousCutoffDate && reinv.asOf
+    ? `Após ${previousCutoff} até ${asOf}`
+    : 'Janela operacional registrada';
   return `
     <div class="reinvestment-banner">
       <div>
         <div class="metric-label">Caixa de proventos para o próximo plano</div>
         <div class="big value-positive">${fmt.brl(availableBRL)}</div>
-        <div class="meta">Saldo de proventos já recebidos e ainda não utilizados em plano anterior.</div>
+        <div class="meta">Saldo em reais já recebido e ainda não utilizado. Proventos em dólar ficam fora deste controle operacional.</div>
+        <div class="reinvestment-breakdown">
+          <div><span>Saldo transportado</span><strong>${fmt.brl(openingBRL)}</strong></div>
+          <div><span>Recebido na janela</span><strong>${fmt.brl(receiptsBRL)}</strong></div>
+          <div><span>Plano anterior executado</span><strong>${fmt.brl(previousPlanExecutedBRL)}</strong></div>
+          <div><span>Ajustes da janela</span><strong>${fmt.brl(adjustmentsBRL)}</strong></div>
+        </div>
       </div>
       <div class="meta">
         <strong>Corte operacional: ${asOf}</strong><br />
-        Este saldo não mede os proventos do mês; mede apenas o caixa ainda livre para a próxima decisão de reinvestimento.<br />
-        ${availableUSD !== null ? `Caixa separado em USD: <strong>${fmt.usd(availableUSD)}</strong>.` : ''}
+        Janela: ${windowLabel}. O início é exclusivo e o corte final é inclusivo, evitando duplicidade entre ciclos.<br />
+        Este caixa alimenta automaticamente os recursos disponíveis do próximo plano de ação.
       </div>
     </div>`;
 }
@@ -5436,6 +5541,13 @@ window.lgvReportSetStatus = setStatus;
     merged.investmentPreferences = { ...(cloudData.investmentPreferences || {}), ...(localData.investmentPreferences || {}) };
     merged.reportSnapshots = { ...(cloudData.reportSnapshots || {}), ...(localData.reportSnapshots || {}) };
     merged.actionPlans = { ...(cloudData.actionPlans || {}), ...(localData.actionPlans || {}) };
+    merged.reinvestmentCashPolicy = { ...(cloudData.reinvestmentCashPolicy || {}), ...(localData.reinvestmentCashPolicy || {}) };
+    const cashWindowMap = new Map();
+    [...(cloudData.reinvestmentCashWindows || []), ...(localData.reinvestmentCashWindows || [])].forEach(row => {
+      const key = row?.windowId || [row?.previousCutoffDate, row?.cutoffDate].filter(Boolean).join('__');
+      if (key) cashWindowMap.set(key, { ...(cashWindowMap.get(key) || {}), ...row, windowId:key });
+    });
+    merged.reinvestmentCashWindows = [...cashWindowMap.values()].sort((a,b) => String(a.cutoffDate || '').localeCompare(String(b.cutoffDate || '')));
     merged.availableReports = mergeAvailableReports(cloudData.availableReports || [], localData.availableReports || []);
     const cloudPerf = Array.isArray(cloudData.dailyPerformance) ? cloudData.dailyPerformance : [];
     const localPerf = Array.isArray(localData.dailyPerformance) ? localData.dailyPerformance : [];
@@ -5874,6 +5986,7 @@ window.lgvReportSetStatus = setStatus;
     const positions = latestPositions(data).slice().sort((a, b) => (Number(b.marketValue) || 0) - (Number(a.marketValue) || 0));
     const coverage = activeClientDoc.coverage || buildMetadata(data).coverage || {};
     const targets = activeClientDoc.allocationPolicy?.targets || data.allocationPolicy?.targets || [];
+    const cashWindow = window.lgvGetReinvestmentCashWindowForPeriod?.(data, reportInfo.period) || null;
     return `
       <div class="profile-grid kpis">
         <div class="profile-kpi"><span>Último patrimônio</span><strong>${formatMoney(summary.latestWealth)}</strong><small>${summary.latestPositionDate ? `posição de ${formatDate(summary.latestPositionDate)}` : 'sem posição importada'}</small></div>
@@ -5922,6 +6035,15 @@ window.lgvReportSetStatus = setStatus;
               <div class="profile-summary-row"><span>Resultado financeiro</span><strong>${formatMoney(reportSummary.financialResultPositionAdjusted ?? reportSummary.financialResultDailyPerformance)}</strong></div>
             </div>
           </section>
+
+          ${cashWindow ? `<section class="profile-panel cash-window-profile">
+            <div class="profile-panel-head"><div><h3>Caixa de proventos</h3><p>Recursos em reais para o próximo plano.</p></div><span class="profile-tag">corte ${escapeHtml(formatDate(cashWindow.cutoffDate))}</span></div>
+            <div class="profile-summary-list">
+              <div class="profile-summary-row"><span>Disponível</span><strong>${formatMoney(cashWindow.closingAvailableBalanceBRL)}</strong></div>
+              <div class="profile-summary-row"><span>Recebido na janela</span><strong>${formatMoney(cashWindow.receiptsInWindowBRL)}</strong></div>
+              <div class="profile-summary-row"><span>Janela</span><strong>após ${escapeHtml(formatDate(cashWindow.previousCutoffDate))} até ${escapeHtml(formatDate(cashWindow.cutoffDate))}</strong></div>
+            </div>
+          </section>` : ''}
         </div>
       </div>`;
   }
