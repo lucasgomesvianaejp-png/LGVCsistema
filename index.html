@@ -1598,12 +1598,12 @@
   </div>
 
 <script>
-// LGV Capital Reports v30 — Marcus upgrade consolidado
+// LGV Invest V4 — desempenho mensal consolidado e auditoria da série diária
 const REPORT_BLOCKS = [
   { key: 'wealth', label: 'Patrimônio consolidado' },
   { key: 'summaryCards', label: 'Cards de resumo' },
   { key: 'equityChart', label: 'Evolução patrimonial' },
-  { key: 'performanceChart', label: 'Carteira x CDI x IPCA' },
+  { key: 'performanceChart', label: 'Rentabilidade x CDI x IPCA' },
   { key: 'goal', label: 'Meta' },
   { key: 'motors', label: 'Motores da carteira' },
   { key: 'allocation', label: 'Alocação x alvo' },
@@ -2405,7 +2405,8 @@ async function refreshMarketRates() {
     state.market.cdiSeries[state.selectedPeriod] = cdiAll;
     state.market.cdiFromStart[state.selectedPeriod] = { value: cdiStart, records: cdiAll.length };
     report.summary.cdiReturn = cdi;
-    report.summary.portfolioVsCDI = cdi ? report.summary.periodReturnBySharePrice / cdi : null;
+    const portfolioMonthReturn = getOfficialMonthlyReturn(state.data, report);
+    report.summary.portfolioVsCDI = cdi && Number.isFinite(portfolioMonthReturn) ? portfolioMonthReturn / cdi : null;
     cdiPill.className = 'pill ok';
     cdiPill.textContent = `CDI ${fmt.month(state.selectedPeriod)}: ${fmt.pct(cdi)}`;
   } catch (err) {
@@ -2516,7 +2517,7 @@ function calcGoal(report) {
   // Rentabilidade real observada: carteira nominal por cota, deflacionada pelo IPCA
   // composto no mesmo horizonte. O primeiro e o último mês são proporcionais
   // quando a janela não coincide com meses completos.
-  const portfolioAccum = (data.rentabilitySummary?.sinceStartPercent ?? 0) / 100;
+  const portfolioAccum = getOfficialAccumulatedReturn(data, report) ?? ((data.rentabilitySummary?.sinceStartPercent ?? 0) / 100);
   const ipcaItems = state.market.ipcaSeries[state.selectedPeriod] || [];
   const alignedInflation = accumulateMonthlyRatesAligned(ipcaItems, consultingStart, periodEnd);
   let actualRealAccum = null;
@@ -2628,9 +2629,9 @@ function renderReport() {
   const goalCalc = calcGoal(report);
   const cdi = report.summary.cdiReturn;
   const reconcile = report.reconciliation || {};
-  const recClass = reconcile.status === 'acceptable' ? 'ok' : (Math.abs(reconcile.differencePercent || 0) <= .01 ? 'warn' : 'bad');
+  const recClass = reconcile.status === 'acceptable' ? 'ok' : (reconcile.status === 'acceptable_with_reservation' ? 'warn' : (Math.abs(reconcile.differencePercent || 0) <= .01 ? 'warn' : 'bad'));
   document.getElementById('reconcilePill').className = `pill ${recClass}`;
-  document.getElementById('reconcilePill').textContent = `Conciliação: ${reconcile.status || '—'} (${fmt.pct(reconcile.differencePercent || 0)})`;
+  document.getElementById('reconcilePill').textContent = `Conciliação: ${friendlyReconciliationStatus(reconcile.status)} (${fmt.pct(reconcile.differencePercent || 0)})`;
   document.getElementById('reportSubtitle').textContent = `${client.name || 'Cliente'} · ${fmt.month(state.selectedPeriod)} · data-base ${fmt.date(report.periodEnd)}`;
 
   const pages = [];
@@ -2695,6 +2696,65 @@ function getDailySinceStart(data, report) {
     .sort((a,b) => a.date.localeCompare(b.date));
 }
 
+function periodEndIso(period) {
+  if (!/^\d{4}-\d{2}$/.test(String(period || ''))) return '';
+  const [year, month] = String(period).split('-').map(Number);
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0,10);
+}
+
+function getMonthlySinceStart(data, report) {
+  const consultingStart = data.client?.consultingStartDate || report.periodStart;
+  const startPeriod = String(consultingStart || '').slice(0,7);
+  const endPeriod = String(report.periodEnd || '').slice(0,7);
+  return (data.monthlyPerformance || [])
+    .filter(row => row && row.period && row.period >= startPeriod && row.period <= endPeriod && row.isPartial !== true)
+    .map(row => ({ ...row, date: row.periodEnd || periodEndIso(row.period) }))
+    .sort((a,b) => String(a.period).localeCompare(String(b.period)));
+}
+
+function getOfficialMonthlyRow(data, report) {
+  const period = String(report?.period || state.selectedPeriod || report?.periodEnd || '').slice(0,7);
+  return (data?.monthlyPerformance || []).find(row => row?.period === period && row.isPartial !== true) || null;
+}
+
+function finiteNumber(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue;
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+}
+
+function getOfficialMonthlyReturn(data, report) {
+  const row = getOfficialMonthlyRow(data, report);
+  return finiteNumber(
+    row?.monthlyReturn,
+    row?.return,
+    report?.summary?.periodReturnOfficial,
+    report?.summary?.periodReturnBySharePrice
+  );
+}
+
+function getOfficialAccumulatedReturn(data, report) {
+  const row = getOfficialMonthlyRow(data, report);
+  return finiteNumber(
+    row?.accumulatedReturn,
+    report?.summary?.accumulatedReturnOfficial,
+    data?.rentabilitySummary?.sinceStartPercent != null ? Number(data.rentabilitySummary.sinceStartPercent) / 100 : null
+  );
+}
+
+function isDailyPerformanceTrusted(data, report) {
+  const status = String(
+    report?.performanceAudit?.dailySeriesStatus
+    || data?.dataQuality?.dailyPerformance?.status
+    || data?.dailyPerformanceAudit?.status
+    || ''
+  ).toLowerCase();
+  return !['not_reconciled', 'rejected', 'review', 'unreliable'].includes(status);
+}
+
 function getPositionsAtDate(data, date) {
   return (data.positions || []).filter(p => p.date === date);
 }
@@ -2712,19 +2772,27 @@ function getAccumulatedPositionReturn(data, report) {
 }
 
 function getEquityCurve(data, report) {
-  const finalPosition = report.summary?.currentWealthPositionDetail;
-  const positionDates = [...new Set((data.positions || []).map(p => p.date))].sort();
-  if (positionDates.length >= 4) {
-    return positionDates.filter(d => d <= report.periodEnd).map(date => ({
-      date,
-      value: getPositionsAtDate(data, date).reduce((sum, p) => sum + (Number(p.marketValue) || 0), 0)
-    }));
+  const monthlyRows = getMonthlySinceStart(data, report);
+  if (monthlyRows.length) {
+    return monthlyRows
+      .filter(row => Number.isFinite(Number(row.equity)))
+      .map(row => ({ date: row.date, value: Number(row.equity), source: 'monthly' }));
   }
-  const rows = getDailySinceStart(data, report);
-  if (!rows.length) return [];
-  const last = rows.at(-1).equity || finalPosition || 0;
-  const adjustment = last ? (finalPosition || last) / last : 1;
-  return rows.map(r => ({ date: r.date, value: (Number(r.equity) || 0) * adjustment }));
+
+  const finalPosition = report.summary?.currentWealthPositionDetail;
+  const dailyRows = getDailySinceStart(data, report);
+  if (dailyRows.length && isDailyPerformanceTrusted(data, report)) {
+    const last = Number(dailyRows.at(-1).equity) || finalPosition || 0;
+    const adjustment = last ? (finalPosition || last) / last : 1;
+    return dailyRows.map(row => ({ date: row.date, value: (Number(row.equity) || 0) * adjustment, source: 'daily' }));
+  }
+
+  const positionDates = [...new Set((data.positions || []).map(p => p.date))].sort();
+  return positionDates.filter(date => date <= report.periodEnd).map(date => ({
+    date,
+    value: getPositionsAtDate(data, date).reduce((sum, position) => sum + (Number(position.marketValue) || 0), 0),
+    source: 'positions'
+  }));
 }
 
 
@@ -2900,17 +2968,38 @@ function renderAssetRows(rows, type) {
 }
 
 function buildBenchmarkComparison(data, report) {
-  const rows = getDailySinceStart(data, report);
+  const monthlyRows = getMonthlySinceStart(data, report);
+  const useMonthly = monthlyRows.length > 0;
+  const rows = useMonthly ? monthlyRows : getDailySinceStart(data, report);
   if (!rows.length) {
-    return { rows: [], portfolioPts: [], cdiPts: [], ipcaPts: [], portfolioAccumulated: null, cdiAccumulated: null, ipcaAccumulated: null, ipcaAccumulatedEstimated: false };
+    return { source: 'unavailable', rows: [], portfolioPts: [], cdiPts: [], ipcaPts: [], portfolioAccumulated: null, cdiAccumulated: null, ipcaAccumulated: null, ipcaAccumulatedEstimated: false };
   }
 
-  const baseShare = Number(rows[0].sharePrice) || 1;
-  const portfolioPts = rows.map(r => ({
-    date: r.date,
-    label: r.date.slice(5,7) + '/' + r.date.slice(2,4),
-    value: baseShare ? ((Number(r.sharePrice) || baseShare) / baseShare) - 1 : 0
-  }));
+  let portfolioPts;
+  if (useMonthly) {
+    let factor = 1;
+    portfolioPts = rows.map((row, index) => {
+      const officialAccumulated = finiteNumber(row.accumulatedReturn);
+      if (officialAccumulated !== null) {
+        factor = 1 + officialAccumulated;
+      } else {
+        const monthlyReturn = finiteNumber(row.monthlyReturn, 0) || 0;
+        factor *= (1 + monthlyReturn);
+      }
+      return {
+        date: row.date,
+        label: row.date.slice(5,7) + '/' + row.date.slice(2,4),
+        value: index === 0 && finiteNumber(row.accumulatedReturn) === null ? 0 : factor - 1
+      };
+    });
+  } else {
+    const baseShare = Number(rows[0].sharePrice) || 1;
+    portfolioPts = rows.map(row => ({
+      date: row.date,
+      label: row.date.slice(5,7) + '/' + row.date.slice(2,4),
+      value: baseShare ? ((Number(row.sharePrice) || baseShare) / baseShare) - 1 : 0
+    }));
+  }
 
   const buildNormalizedPts = (items, { monthly = false } = {}) => {
     if (!items || !items.length) return { points: [], accumulated: null, estimated: false };
@@ -2920,16 +3009,16 @@ function buildBenchmarkComparison(data, report) {
     let factor = 1;
     let idx = 0;
     let baseFactor = null;
-    const points = rows.map((r, rowIdx) => {
-      const rowDate = monthly ? monthStartIso(r.date) : r.date;
+    const points = rows.map((row, rowIdx) => {
+      const rowDate = monthly ? monthStartIso(row.date) : row.date;
       while (idx < sorted.length && isoFromBRDate(sorted[idx].data) <= rowDate) {
         factor *= (1 + decimalFromBCBValue(sorted[idx].valor));
         idx++;
       }
       if (rowIdx === 0) baseFactor = factor || 1;
       return {
-        date: r.date,
-        label: r.date.slice(5,7) + '/' + r.date.slice(2,4),
+        date: row.date,
+        label: row.date.slice(5,7) + '/' + row.date.slice(2,4),
         value: (factor / (baseFactor || 1)) - 1
       };
     });
@@ -2940,15 +3029,16 @@ function buildBenchmarkComparison(data, report) {
 
   const cdi = buildNormalizedPts(state.market.cdiSeries[state.selectedPeriod] || []);
   const ipcaItems = state.market.ipcaSeries[state.selectedPeriod] || [];
-  const ipcaPoints = rows.map((r, idx) => ({
-    date: r.date,
-    label: r.date.slice(5,7) + '/' + r.date.slice(2,4),
-    value: idx === 0 ? 0 : accumulateMonthlyRatesAligned(ipcaItems, rows[0].date, r.date).value
+  const ipcaPoints = rows.map((row, idx) => ({
+    date: row.date,
+    label: row.date.slice(5,7) + '/' + row.date.slice(2,4),
+    value: idx === 0 ? 0 : accumulateMonthlyRatesAligned(ipcaItems, rows[0].date, row.date).value
   }));
   const ipcaAccumulated = ipcaPoints.length ? ipcaPoints.at(-1).value : null;
   const ipcaEstimated = accumulateMonthlyRatesAligned(ipcaItems, rows[0].date, rows.at(-1).date).estimated;
 
   return {
+    source: useMonthly ? 'monthly' : 'daily_shares',
     rows,
     portfolioPts,
     cdiPts: cdi.points,
@@ -2972,14 +3062,14 @@ function renderPage1(data, report, goal) {
   const ipcaFromStartEstimated = !!(benchmark.ipcaAccumulatedEstimated || ipcaFromStartState.estimated);
   const positionResult = s.financialResultPositionAdjusted ?? s.financialResultDailyPerformance ?? 0;
   const positionReturn = s.initialWealthPositionDetail ? positionResult / s.initialWealthPositionDetail : 0;
-  const returnClass = positionReturn >= 0 ? 'positive' : 'negative';
+  const shareMonthly = getOfficialMonthlyReturn(data, report);
+  const shareAccumulated = getOfficialAccumulatedReturn(data, report) ?? benchmark.portfolioAccumulated;
+  const returnClass = (shareMonthly ?? 0) >= 0 ? 'positive' : 'negative';
   const resultClass = positionResult >= 0 ? 'positive' : 'negative';
   const accumulatedResult = getAccumulatedPositionGain(data, report);
   const accumulatedReturn = getAccumulatedPositionReturn(data, report);
   const accumulatedResultClass = accumulatedResult >= 0 ? 'positive' : 'negative';
-  const accumulatedReturnClass = (accumulatedReturn ?? 0) >= 0 ? 'positive' : 'negative';
-  const shareMonthly = s.periodReturnBySharePrice;
-  const shareAccumulated = benchmark.portfolioAccumulated ?? ((data.rentabilitySummary?.sinceStartPercent ?? 0) / 100);
+  const accumulatedReturnClass = (shareAccumulated ?? 0) >= 0 ? 'positive' : 'negative';
   const incomeModelLabel = goal.incomeModel === 'consumption' ? 'Consumindo patrimônio' : 'Preservando patrimônio';
   const objectiveTitle = goal.objective === 'wealth' ? 'Meta patrimonial' : 'Meta de renda';
   const objectiveValue = goal.objective === 'wealth' ? fmt.brl(goal.targetWealth) : `${fmt.brl(goal.desiredIncome)}/mês`;
@@ -2997,13 +3087,13 @@ function renderPage1(data, report, goal) {
         </div>`);
   if (isBlockEnabled('performanceChart')) chartCards.push(`
         <div class="chart-card chart-wide">
-          <div class="chart-title">Rentabilidade por cotas x CDI x IPCA</div>
-          <div class="chart-subtitle">Performance por cotas, normalizada desde o início da consultoria.</div>
+          <div class="chart-title">Rentabilidade da carteira x CDI x IPCA</div>
+          <div class="chart-subtitle">${benchmark.source === 'monthly' ? 'Performance mensal acumulada desde o início da consultoria.' : 'Performance por cotas, normalizada desde o início da consultoria.'}</div>
           <svg class="svg-chart" id="cdiAccumChart"></svg>
           <table class="performance-table">
             <thead><tr><th>Indicador</th><th>Variação do mês</th><th>Acumulado</th></tr></thead>
             <tbody>
-              <tr><td class="indicator">Carteira (cotas)</td><td>${pctCell(shareMonthly)}</td><td>${pctCell(shareAccumulated)}</td></tr>
+              <tr><td class="indicator">Carteira</td><td>${pctCell(shareMonthly)}</td><td>${pctCell(shareAccumulated)}</td></tr>
               <tr><td class="indicator">CDI</td><td>${pctCell(cdi)}</td><td>${pctCell(cdiFromStart)}</td></tr>
               <tr><td class="indicator">IPCA</td><td>${pctCell(ipcaPeriod, ipcaPeriodEstimated)}</td><td>${pctCell(ipcaFromStart, ipcaFromStartEstimated)}</td></tr>
             </tbody>
@@ -3026,8 +3116,8 @@ function renderPage1(data, report, goal) {
         <div class="metric-card"><div class="metric-label">Resgates no mês</div><div class="metric-value">${fmt.brl(s.withdrawals)}</div><div class="metric-hint">Saídas externas</div></div>
         <div class="metric-card"><div class="metric-label">Ganho do mês (R$)</div><div class="metric-value ${resultClass}">${fmt.brl(positionResult)}</div><div class="metric-hint">Posição detalhada</div></div>
         <div class="metric-card"><div class="metric-label">Ganho acumulado da posição</div><div class="metric-value ${accumulatedResultClass}">${fmt.brl(accumulatedResult)}</div><div class="metric-hint">Resultado atual dos ativos</div></div>
-        <div class="metric-card"><div class="metric-label">Ganho do mês (%)</div><div class="metric-value ${returnClass}">${fmt.pct(positionReturn)}</div><div class="metric-hint">Posição detalhada</div></div>
-        <div class="metric-card"><div class="metric-label">Ganho sobre capital investido</div><div class="metric-value ${accumulatedReturnClass}">${accumulatedReturn === null ? '—' : fmt.pct(accumulatedReturn)}</div><div class="metric-hint">Ganho acumulado ÷ capital investido</div></div>
+        <div class="metric-card"><div class="metric-label">Rentabilidade no mês</div><div class="metric-value ${returnClass}">${shareMonthly === null ? '—' : fmt.pct(shareMonthly)}</div><div class="metric-hint">${benchmark.source === 'monthly' ? 'Consolidação mensal' : 'Metodologia de cotas'}</div></div>
+        <div class="metric-card"><div class="metric-label">Rentabilidade acumulada</div><div class="metric-value ${accumulatedReturnClass}">${shareAccumulated === null ? '—' : fmt.pct(shareAccumulated)}</div><div class="metric-hint">Desde o início da consultoria</div></div>
       </div>` : ''}
 
       ${chartCards.length ? `
@@ -3501,7 +3591,7 @@ function renderCommentPages(data, report) {
 }
 
 function friendlyReconciliationStatus(status) {
-  const labels = { acceptable: 'Dentro da tolerância', attention: 'Atenção', review: 'Revisar' };
+  const labels = { acceptable: 'Dentro da tolerância', acceptable_with_reservation: 'Conciliado com ressalva', attention: 'Atenção', review: 'Revisar' };
   return labels[status] || '—';
 }
 
@@ -3514,7 +3604,7 @@ function renderPage4(data, report, goal) {
   const rawGoal = data.goal || {};
   const initial = goal.initial || rawGoal.initialSimulation || {};
   const benchmark = buildBenchmarkComparison(data, report);
-  const shareAccumulated = benchmark.portfolioAccumulated ?? ((data.rentabilitySummary?.sinceStartPercent ?? 0) / 100);
+  const shareAccumulated = getOfficialAccumulatedReturn(data, report) ?? benchmark.portfolioAccumulated;
   const cdiMonth = state.market.cdi[state.selectedPeriod]?.value ?? s.cdiReturn;
   const cdiAccum = benchmark.cdiAccumulated ?? state.market.cdiFromStart[state.selectedPeriod]?.value;
   const ipcaPeriodState = state.market.ipcaPeriod[state.selectedPeriod] || {};
@@ -3545,7 +3635,7 @@ function renderPage4(data, report, goal) {
           <h3>Fontes principais</h3>
           <div class="assumption-list">
             ${renderAssumptionItem('Patrimônio, alocação e ganhos', 'Posição detalhada')}
-            ${renderAssumptionItem('Rentabilidade da carteira', 'Cota diária')}
+            ${renderAssumptionItem('Rentabilidade da carteira', benchmark.source === 'monthly' ? 'Consolidação mensal do MyProfit' : 'Cota diária')}
             ${renderAssumptionItem('CDI', 'BCB · SGS 12')}
             ${renderAssumptionItem('IPCA', `BCB · SGS 433${ipcaSuffix}`)}
             ${normalizeIncomeData(data, report) ? renderAssumptionItem('Proventos recebidos', 'Relatório de proventos') : ''}
@@ -3591,7 +3681,7 @@ function renderPage4(data, report, goal) {
             ${renderAssumptionItem('Aportes no mês', fmt.brl(s.contributions || 0))}
             ${renderAssumptionItem('Resgates no mês', fmt.brl(s.withdrawals || 0))}
             ${renderAssumptionItem('Ganho do mês', fmt.brl(positionResult))}
-            ${renderAssumptionItem('Ganho do mês (%)', fmt.pct(positionReturn))}
+            ${renderAssumptionItem('Rentabilidade oficial do mês', getOfficialMonthlyReturn(data, report) === null ? '—' : fmt.pct(getOfficialMonthlyReturn(data, report)))}
             ${renderAssumptionItem('Ganho acumulado da posição', fmt.brl(accumulatedGain))}
             ${renderAssumptionItem('Ganho sobre capital investido', accumulatedGainPct === null ? '—' : fmt.pct(accumulatedGainPct))}
           </div>
@@ -3600,7 +3690,7 @@ function renderPage4(data, report, goal) {
         <div class="assumption-card">
           <h3>Comparadores</h3>
           <div class="assumption-list">
-            ${renderAssumptionItem('Rentabilidade por cotas desde o início', fmt.pct(shareAccumulated))}
+            ${renderAssumptionItem(benchmark.source === 'monthly' ? 'Rentabilidade acumulada desde o início' : 'Rentabilidade por cotas desde o início', fmt.pct(shareAccumulated))}
             ${renderAssumptionItem('CDI no mês', typeof cdiMonth === 'number' ? fmt.pct(cdiMonth) : '—')}
             ${renderAssumptionItem('CDI desde o início', typeof cdiAccum === 'number' ? fmt.pct(cdiAccum) : '—')}
             ${renderAssumptionItem('IPCA no mês', typeof ipcaMonth === 'number' ? fmt.pct(ipcaMonth) + (ipcaPeriodState.estimated ? ' estimado' : '') : '—')}
@@ -3613,15 +3703,17 @@ function renderPage4(data, report, goal) {
           <div class="assumption-list">
             ${renderAssumptionItem('Status', friendlyReconciliationStatus(reconcile.status))}
             ${renderAssumptionItem('Patrimônio pela posição', fmt.brl(reconcile.positionDetailWealth ?? s.currentWealthPositionDetail))}
-            ${renderAssumptionItem('Patrimônio pela rentabilidade', fmt.brl(reconcile.dailyPerformanceWealth ?? s.currentWealthDailyPerformance ?? 0))}
-            ${renderAssumptionItem('Diferença', fmt.brl(reconcile.differenceValue || 0))}
-            ${renderAssumptionItem('Diferença percentual', fmt.pct(reconcile.differencePercent || 0))}
+            ${renderAssumptionItem('Patrimônio mensal consolidado', fmt.brl(reconcile.monthlyPerformanceWealth ?? s.currentWealthMonthlyPerformance ?? s.currentWealthPositionDetail))}
+            ${renderAssumptionItem('Diferença principal', fmt.brl(reconcile.differenceValue || 0))}
+            ${renderAssumptionItem('Série diária', reconcile.dailySeriesStatus === 'not_reconciled' ? 'Não conciliada · excluída dos gráficos' : 'Conciliada')}
+            ${reconcile.dailyPerformanceWealth != null ? renderAssumptionItem('Patrimônio na série diária', fmt.brl(reconcile.dailyPerformanceWealth)) : ''}
+            ${reconcile.dailyDifferenceValue != null ? renderAssumptionItem('Diferença da série diária', fmt.brl(reconcile.dailyDifferenceValue)) : ''}
           </div>
         </div>
       </div>
 
       <div class="calculation-note">
-        A rentabilidade da carteira é calculada por cotas e considera o tempo de exposição de cada aporte. Já o ganho da posição mostra o resultado financeiro dos ativos atuais pela posição detalhada. Por isso, os dois números podem ser diferentes.
+        ${benchmark.source === 'monthly' ? 'A rentabilidade da carteira foi obtida da consolidação mensal do MyProfit, porque a série diária não passou na conciliação deste período.' : 'A rentabilidade da carteira é calculada por cotas e considera o tempo de exposição de cada aporte.'} Já o ganho da posição mostra o resultado financeiro aproximado pela variação patrimonial ajustada pelos aportes e resgates. Por isso, os dois números podem ser diferentes.
       </div>
       ${renderDisclaimer()}
     </div>
@@ -5244,6 +5336,11 @@ window.lgvReportSetStatus = setStatus;
     const cloudPerf = Array.isArray(cloudData.dailyPerformance) ? cloudData.dailyPerformance : [];
     const localPerf = Array.isArray(localData.dailyPerformance) ? localData.dailyPerformance : [];
     merged.dailyPerformance = localPerf.length >= cloudPerf.length ? localPerf : cloudPerf;
+    const monthlyMap = new Map();
+    [...(cloudData.monthlyPerformance || []), ...(localData.monthlyPerformance || [])].forEach(row => {
+      if (row?.period) monthlyMap.set(row.period, { ...(monthlyMap.get(row.period) || {}), ...row });
+    });
+    merged.monthlyPerformance = [...monthlyMap.values()].sort((a,b) => String(a.period).localeCompare(String(b.period)));
     if (Array.isArray(localData.positions) && Array.isArray(cloudData.positions)) {
       merged.positions = localData.positions.length >= cloudData.positions.length ? localData.positions : cloudData.positions;
     }
@@ -5352,10 +5449,13 @@ window.lgvReportSetStatus = setStatus;
       data?.goal?.initialSimulation?.currentWealthUsed
     ];
     const latestWealth = latestWealthCandidates.map(Number).find(Number.isFinite) ?? null;
-    const contributions = sum(performance, 'purchases');
-    const withdrawals = sum(performance, 'sales');
-    const income = sum(performance, 'proceeds');
-    let sinceStartReturn = Number(data?.rentabilitySummary?.sinceStartPercent);
+    const contributions = sum(performance, 'contributions');
+    const withdrawals = sum(performance, 'withdrawals');
+    const income = sum(performance, 'income');
+    const latestMonthly = [...(data?.monthlyPerformance || [])].filter(row => row?.isPartial !== true).sort((a,b) => String(a.period).localeCompare(String(b.period))).at(-1);
+    let sinceStartReturn = Number.isFinite(Number(latestMonthly?.accumulatedReturn))
+      ? Number(latestMonthly.accumulatedReturn) * 100
+      : Number(data?.rentabilitySummary?.sinceStartPercent);
     if (!Number.isFinite(sinceStartReturn)) {
       const firstShare = Number(firstPerf.sharePrice);
       const lastShare = Number(lastPerf.sharePrice);
@@ -5701,7 +5801,7 @@ window.lgvReportSetStatus = setStatus;
           <section class="profile-panel">
             <div class="profile-panel-head"><div><h3>Último mês</h3><p>${escapeHtml(formatPeriod(reportInfo.period))}</p></div></div>
             <div class="profile-summary-list">
-              <div class="profile-summary-row"><span>Rentabilidade</span><strong>${formatPercent(Number(reportSummary.periodReturnBySharePrice) * 100)}</strong></div>
+              <div class="profile-summary-row"><span>Rentabilidade</span><strong>${formatPercent(Number(reportSummary.periodReturnOfficial ?? reportSummary.periodReturnBySharePrice) * 100)}</strong></div>
               <div class="profile-summary-row"><span>Aportes</span><strong>${formatMoney(reportSummary.contributions)}</strong></div>
               <div class="profile-summary-row"><span>Proventos recebidos</span><strong>${formatMoney(reportSummary.incomeReceivedInMonth)}</strong></div>
               <div class="profile-summary-row"><span>Resultado financeiro</span><strong>${formatMoney(reportSummary.financialResultPositionAdjusted ?? reportSummary.financialResultDailyPerformance)}</strong></div>
@@ -5823,7 +5923,7 @@ window.lgvReportSetStatus = setStatus;
             <div class="profile-report-period">${escapeHtml(formatPeriod(period))}</div>
             <div class="profile-report-metrics">
               <span>Patrimônio: <strong>${formatMoney(summary.currentWealthPositionDetail ?? summary.currentWealthDailyPerformance ?? summary.currentWealth)}</strong></span>
-              <span>Rentabilidade: <strong>${formatPercent(Number(summary.periodReturnBySharePrice) * 100)}</strong></span>
+              <span>Rentabilidade: <strong>${formatPercent(Number(summary.periodReturnOfficial ?? summary.periodReturnBySharePrice) * 100)}</strong></span>
               <span>Aportes: <strong>${formatMoney(summary.contributions)}</strong></span>
               <span>Proventos: <strong>${formatMoney(summary.incomeReceivedInMonth)}</strong></span>
             </div>
