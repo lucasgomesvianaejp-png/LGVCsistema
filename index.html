@@ -2008,11 +2008,24 @@ function normalizeActionPlanObject(item, fallbackPeriod = null) {
     const amount = pickFirstNumber(row.amount, row.value, row.total, row.valor);
     const destination = row.destination || row.label || row.name || row.destino || row.assetId || row.asset;
     if (!destination || amount === null) return null;
+    const quantity = pickFirstNumber(row.quantity, row.quantidade, row.units, row.cotas);
+    const referencePrice = pickFirstNumber(row.referencePrice, row.reference_price, row.cotacaoReferencia, row.precoReferencia);
+    const originalAmount = pickFirstNumber(row.originalAmount, row.original_amount, row.valorOriginal, row.valorDestinado);
+    const remainder = pickFirstNumber(row.remainder, row.leftover, row.sobra);
+    const pix = row.pix && typeof row.pix === 'object'
+      ? { ...row.pix }
+      : (row.pixKey || row.chavePix ? { key: row.pixKey || row.chavePix } : null);
     return {
       destination: String(destination),
       assetId: row.assetId || row.asset || row.ticker || null,
       account: row.account || row.institution || row.conta || row.instituicao || null,
       amount,
+      quantity: quantity ?? null,
+      referencePrice: referencePrice ?? null,
+      originalAmount: originalAmount ?? null,
+      remainder: remainder ?? null,
+      pix,
+      pixKey: row.pixKey || row.chavePix || null,
       note: row.note || row.observation || row.obs || row.observacao || ''
     };
   }).filter(Boolean) : [];
@@ -2161,7 +2174,11 @@ function isGenericBrokerAccount(value) {
 function actionPlanOperationLabel(row) {
   const name = String(row?.destination || row?.assetId || 'Operação');
   if (row?.pixKey) return `Fazer PIX para ${row.account || name}`;
-  if (/GOLD11/i.test(name) || /GOLD11/i.test(String(row?.assetId || ''))) return 'Comprar 36 cotas de GOLD11 pela corretora';
+  if (/GOLD11/i.test(name) || /GOLD11/i.test(String(row?.assetId || ''))) {
+    return row?.quantity
+      ? `Comprar ${row.quantity} cotas de GOLD11 pela corretora`
+      : 'Comprar GOLD11 pela corretora';
+  }
   return row?.account ? `Executar em ${row.account}` : 'Executar operação';
 }
 
@@ -2174,7 +2191,7 @@ function renderActionPlanAllocations(plan) {
     const brokerDetails = isGold ? `
       <div class="plan-broker-box">
         <div class="plan-broker-item"><span>Operação</span><strong>Comprar na corretora</strong></div>
-        <div class="plan-broker-item"><span>Quantidade</span><strong>${row.quantity || 36} cotas</strong></div>
+        <div class="plan-broker-item"><span>Quantidade</span><strong>${row.quantity ? `${row.quantity} cotas` : '—'}</strong></div>
         <div class="plan-broker-item"><span>Cotação de referência</span><strong>${row.referencePrice ? fmt.brl(row.referencePrice) : '—'}</strong></div>
       </div>` : '';
     const pixBox = hasPix ? `
@@ -5081,7 +5098,7 @@ function buildActionPlanVectorPdf(plan, report) {
       const bw=(contentW-16)/3;
       const details=[
         ['OPERAÇÃO','Compra via corretora'],
-        ['QUANTIDADE',`${row.quantity||36} cotas`],
+        ['QUANTIDADE',row.quantity ? `${row.quantity} cotas` : '—'],
         ['REFERÊNCIA',row.referencePrice?fmt.brl(row.referencePrice):'—']
       ];
       details.forEach((d,i)=>{
