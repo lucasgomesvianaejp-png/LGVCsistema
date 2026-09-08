@@ -1328,6 +1328,217 @@
   }
 </style>
 
+
+
+<style id="lgvA4SafeLayoutV3112">
+  /* v31.12 — A4 legível e resiliente.
+     Prioridade: nunca comprimir texto ao ponto de colar palavras ou sobrepor blocos.
+     A paginação inteligente pode criar folhas adicionais quando necessário. */
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot * { box-sizing: border-box; }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot {
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-synthesis: none;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .report-body {
+    padding: 28px 38px 24px !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .report-footer {
+    padding: 0 38px 22px !important;
+    font-size: 10.5px !important;
+    line-height: 1.35 !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .smart-source-context { min-width: 0; }
+
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .section-title {
+    margin: 18px 0 9px !important;
+    font-size: 14.5px !important;
+    line-height: 1.3 !important;
+    font-weight: 700 !important;
+    letter-spacing: .035em !important;
+    word-spacing: .10em !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .chart-title {
+    font-size: 15.5px !important;
+    line-height: 1.32 !important;
+    font-weight: 700 !important;
+    letter-spacing: 0 !important;
+    word-spacing: .12em !important;
+    margin-bottom: 5px !important;
+    white-space: normal !important;
+    overflow-wrap: normal !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .chart-subtitle {
+    font-size: 11.5px !important;
+    line-height: 1.35 !important;
+    margin-bottom: 8px !important;
+  }
+
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .kpi-grid {
+    gap: 11px !important;
+    margin-bottom: 15px !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .metric-card { padding: 13px 14px !important; }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .metric-label {
+    min-height: 2.45em;
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+    font-weight: 700 !important;
+    letter-spacing: .035em !important;
+    word-spacing: .08em !important;
+    margin-bottom: 6px !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .metric-value,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .kpi-grid .metric-value {
+    font-size: 17.5px !important;
+    line-height: 1.16 !important;
+    font-weight: 800 !important;
+    letter-spacing: -.01em !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .metric-hint {
+    font-size: 10.2px !important;
+    line-height: 1.3 !important;
+    margin-top: 5px !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .goal-detail strong {
+    font-size: 11px !important;
+    line-height: 1.3 !important;
+    font-weight: 700 !important;
+    word-spacing: .09em !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .goal-detail span {
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+  }
+
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .chart-card,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .note-card,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .manual-card { padding: 15px !important; }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .grid { gap: 14px !important; }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .chart-wide .svg-chart { height: 195px !important; }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .performance-table {
+    font-size: 10.5px !important;
+    line-height: 1.25 !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .performance-table th,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .performance-table td { padding: 5px 6px !important; }
+
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .allocation-top,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .result-top,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .asset-top,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .motor-top {
+    align-items: flex-start !important;
+    gap: 16px !important;
+    font-size: 11.5px !important;
+    line-height: 1.3 !important;
+    font-weight: 700 !important;
+    letter-spacing: 0 !important;
+    word-spacing: .08em !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .allocation-top > span:first-child,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .result-top > span:first-child,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .asset-top > span:first-child,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .motor-top > span:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: normal !important;
+    overflow-wrap: break-word;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .allocation-top > span:last-child,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .result-top > span:last-child,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .asset-top > span:last-child,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .motor-top > span:last-child {
+    flex: 0 0 auto;
+    white-space: nowrap !important;
+    text-align: right;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .motor-row,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .allocation-row,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .result-row,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .asset-row,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .definition-item { padding: 11px 12px !important; }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .compact-list,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .definition-list { gap: 9px !important; }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .row-sub,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .motor-result {
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .motor-pct { font-size: 15px !important; }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .definition-item strong {
+    font-size: 11.5px !important;
+    line-height: 1.3 !important;
+    font-weight: 700 !important;
+    word-spacing: .08em !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .definition-item p {
+    font-size: 10px !important;
+    line-height: 1.38 !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .definition-accumulated,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .motor-total,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .result-total {
+    line-height: 1.3 !important;
+    font-weight: 700 !important;
+    word-spacing: .09em !important;
+  }
+
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .income-summary-grid { gap: 8px !important; }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .income-summary-card { padding: 10px !important; }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .income-summary-card .metric-label { min-height: 2.35em; }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .income-ranking-row,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .income-type-card { line-height: 1.3 !important; }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .income-type-card span {
+    font-size: 9.8px !important;
+    line-height: 1.25 !important;
+    font-weight: 700 !important;
+    word-spacing: .08em !important;
+  }
+
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .assumptions-grid { gap: 10px !important; }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .assumption-card { padding: 11px 12px !important; }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .assumption-card h3 {
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+    font-weight: 700 !important;
+    word-spacing: .08em !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .assumption-list {
+    gap: 6px !important;
+    font-size: 10px !important;
+    line-height: 1.3 !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .assumption-item {
+    align-items: flex-start !important;
+    gap: 12px !important;
+    padding-bottom: 6px !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .assumption-item span:first-child {
+    flex: 1 1 45%; min-width: 0; line-height: 1.3 !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .assumption-item strong {
+    flex: 1 1 55%; min-width: 0; max-width: 58%; text-align: right;
+    line-height: 1.3 !important; word-spacing: .07em !important; overflow-wrap: break-word;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .calculation-note,
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .disclaimer {
+    font-size: 10px !important;
+    line-height: 1.4 !important;
+  }
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .disclaimer strong {
+    font-weight: 700 !important;
+    word-spacing: .10em !important;
+    letter-spacing: .035em !important;
+  }
+
+  body.generating-direct-pdf:not(.pdf-mobile) #smartA4PaginationRoot .smart-comment-card .manual-preview {
+    font-size: 14px !important;
+    line-height: 1.62 !important;
+    font-weight: 400 !important;
+    letter-spacing: 0 !important;
+    word-spacing: .06em !important;
+  }
+</style>
 </head>
 <body class="auth-pending">
   <section class="login-screen" id="loginScreen">
@@ -1664,9 +1875,18 @@ const CLASS_LABELS = {
 };
 const MOTOR_LABELS = {
   seguranca_liquidez_motor_rendimento: 'Segurança e liquidez / Motor de Rendimento',
+  seguranca_liquidez: 'Segurança e liquidez',
   motor_rendimento_marcacao_mercado: 'Motor de Rendimento com marcação a mercado',
   motor_valorizacao: 'Motor de Valorização'
 };
+
+function canonicalMotorKey(key) {
+  const aliases = {
+    seguranca_liquidez: 'seguranca_liquidez_motor_rendimento',
+    seguranca_e_liquidez: 'seguranca_liquidez_motor_rendimento'
+  };
+  return aliases[key] || key || 'sem_funcao';
+}
 
 const fmt = {
   money(v, currency='BRL') { return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency }); },
@@ -2848,34 +3068,36 @@ function motorOrderKey(row) {
     motor_rendimento_marcacao_mercado: 2,
     motor_valorizacao: 3
   };
-  return order[row.strategicFunction] || 99;
+  return order[canonicalMotorKey(row?.strategicFunction)] || 99;
 }
 
 function motorShortLabel(key) {
+  const canonical = canonicalMotorKey(key);
   const labels = {
     seguranca_liquidez_motor_rendimento: 'Segurança e liquidez',
     motor_rendimento_marcacao_mercado: 'Rendimento com marcação a mercado',
     motor_valorizacao: 'Valorização e proteção'
   };
-  return labels[key] || MOTOR_LABELS[key] || key;
+  return labels[canonical] || MOTOR_LABELS[canonical] || key;
 }
 
 function motorDefinition(key) {
+  const canonical = canonicalMotorKey(key);
   const defs = {
     seguranca_liquidez_motor_rendimento: 'Base da carteira: liquidez, CDI/Selic e pós-fixados.',
     motor_rendimento_marcacao_mercado: 'Renda fixa IPCA+ e prefixada, com oscilação no caminho.',
     motor_valorizacao: 'Crescimento, diversificação e proteção em ativos mais voláteis.'
   };
-  return defs[key] || '';
+  return defs[canonical] || '';
 }
 
 function getAssetStrategicFunctionMap(data, report) {
   const map = {};
   (data.assetRegistry || []).forEach(a => {
-    if (a.assetId && a.strategicFunction) map[a.assetId] = a.strategicFunction;
+    if (a.assetId && a.strategicFunction) map[a.assetId] = canonicalMotorKey(a.strategicFunction);
   });
   (report.assetResults || []).forEach(a => {
-    if (a.assetId && a.strategicFunction) map[a.assetId] = a.strategicFunction;
+    if (a.assetId && a.strategicFunction) map[a.assetId] = canonicalMotorKey(a.strategicFunction);
   });
   return map;
 }
@@ -2885,7 +3107,7 @@ function getAccumulatedMotorGain(data, report) {
   const fnByAsset = getAssetStrategicFunctionMap(data, report);
   const totals = {};
   getPositionsAtDate(data, positionDate).forEach(p => {
-    const key = fnByAsset[p.assetId] || 'sem_funcao';
+    const key = canonicalMotorKey(fnByAsset[p.assetId] || 'sem_funcao');
     totals[key] = (totals[key] || 0) + (Number(p.gainValue) || 0);
   });
   return totals;
@@ -2894,19 +3116,40 @@ function getAccumulatedMotorGain(data, report) {
 function getMotorRowsWithResults(data, report) {
   const accumulatedByMotor = getAccumulatedMotorGain(data, report);
   const base = {};
+
+  const ensure = key => {
+    const canonical = canonicalMotorKey(key);
+    if (!base[canonical]) {
+      base[canonical] = {
+        strategicFunction: canonical,
+        currentValue: 0,
+        currentWeight: 0,
+        initialValue: 0,
+        periodResult: 0,
+        accumulatedResult: accumulatedByMotor[canonical] || 0
+      };
+    }
+    return base[canonical];
+  };
+
   (report.motors || []).forEach(m => {
-    base[m.strategicFunction] = { ...m, initialValue: 0, periodResult: 0, accumulatedResult: accumulatedByMotor[m.strategicFunction] || 0 };
+    const row = ensure(m.strategicFunction);
+    row.currentValue += Number(m.currentValue) || 0;
+    row.currentWeight += Number(m.currentWeight) || 0;
+    if (!(report.assetResults || []).length) row.periodResult += Number(m.periodResult) || 0;
   });
+
   (report.assetResults || []).forEach(a => {
-    const key = a.strategicFunction || 'sem_funcao';
-    if (!base[key]) base[key] = { strategicFunction: key, currentValue: 0, currentWeight: 0, initialValue: 0, periodResult: 0, accumulatedResult: accumulatedByMotor[key] || 0 };
-    base[key].initialValue += Number(a.initialValue) || 0;
-    base[key].periodResult += Number(a.periodResult) || 0;
+    const row = ensure(a.strategicFunction || 'sem_funcao');
+    row.initialValue += Number(a.initialValue) || 0;
+    row.periodResult += Number(a.periodResult) || 0;
   });
+
   Object.keys(accumulatedByMotor).forEach(key => {
-    if (!base[key]) base[key] = { strategicFunction: key, currentValue: 0, currentWeight: 0, initialValue: 0, periodResult: 0, accumulatedResult: accumulatedByMotor[key] || 0 };
-    else base[key].accumulatedResult = accumulatedByMotor[key] || 0;
+    const canonical = canonicalMotorKey(key);
+    ensure(canonical).accumulatedResult = accumulatedByMotor[canonical] || 0;
   });
+
   return Object.values(base).map(r => ({
     ...r,
     periodReturn: r.initialValue ? r.periodResult / r.initialValue : null
@@ -3388,6 +3631,26 @@ function aggregateIncomeEntries(entries, period) {
   };
 }
 
+function friendlyIncomeTypeLabel(type) {
+  const raw = String(type || '').trim();
+  const key = raw.toUpperCase();
+  const labels = {
+    DIVIDENDO_AVENUE: 'Dividendo (Avenue)',
+    DIVIDENDO_NOMAD: 'Dividendo (Nomad)',
+    DIVIDENDO: 'Dividendo',
+    RENDIMENTO: 'Rendimento',
+    JCP: 'JCP',
+    ALUGUEL: 'Aluguel',
+    REEMBOLSO: 'Reembolso'
+  };
+  if (labels[key]) return labels[key];
+  if (raw.includes('_')) {
+    return raw.toLowerCase().split('_').filter(Boolean)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+  return raw;
+}
+
 function normalizeIncomeRankingRows(rows, accumulatedMode = false) {
   if (!Array.isArray(rows)) return [];
   return rows.map(row => {
@@ -3487,7 +3750,8 @@ function normalizeIncomeData(data, report) {
   const byTypeRaw = src.byType || src.types || src.byNature || src.natures || [];
   const byType = Array.isArray(byTypeRaw) ? byTypeRaw.map(row => {
     if (!row || typeof row !== 'object') return null;
-    const type = row.type || row.name || row.label || row.nature || row.natureza;
+    const typeRaw = row.type || row.name || row.label || row.nature || row.natureza;
+    const type = friendlyIncomeTypeLabel(typeRaw);
     const amount = pickFirstNumber(row.amount, row.value, row.total, row.valor);
     return type && amount !== null ? { type:String(type), amount } : null;
   }).filter(Boolean).sort((a,b) => b.amount - a.amount) : [];
@@ -3800,8 +4064,17 @@ function renderCommentPages(data, report) {
 }
 
 function friendlyReconciliationStatus(status) {
-  const labels = { acceptable: 'Dentro da tolerância', acceptable_with_reservation: 'Conciliado com ressalva', attention: 'Atenção', review: 'Revisar' };
-  return labels[status] || '—';
+  const labels = {
+    acceptable: 'Dentro da tolerância',
+    acceptable_with_reservation: 'Conciliado com ressalva',
+    monthly_official_primary_daily_unavailable: 'Conciliado · fonte mensal',
+    position_and_monthly_close_reconciled_with_prior_source_restatement: 'Conciliado com ressalva',
+    monthly_primary_position_restatement_reconciled: 'Conciliado com ressalva',
+    monthly_primary_position_restatement_reconciled_with_prior_source_restatement: 'Conciliado com ressalva',
+    attention: 'Atenção',
+    review: 'Revisar'
+  };
+  return labels[status] || (status ? 'Conciliado com ressalva' : '—');
 }
 
 function renderAssumptionItem(label, value) {
@@ -3826,6 +4099,18 @@ function renderPage4(data, report, goal) {
   const accumulatedGain = getAccumulatedPositionGain(data, report);
   const accumulatedGainPct = getAccumulatedPositionReturn(data, report);
   const reconcile = report.reconciliation || {};
+  const finiteOrNull = value => value !== null && value !== undefined && Number.isFinite(Number(value)) ? Number(value) : null;
+  const reconcilePosition = finiteOrNull(reconcile.positionDetailWealth)
+    ?? finiteOrNull(s.currentWealthPositionDetail)
+    ?? 0;
+  const reconcileMonthly = finiteOrNull(reconcile.monthlyPerformanceWealth)
+    ?? finiteOrNull(s.currentWealthMonthlyPerformance)
+    ?? finiteOrNull(s.currentWealthPositionDetail)
+    ?? 0;
+  const reconcileDifference = finiteOrNull(reconcile.differenceValue)
+    ?? finiteOrNull(reconcile.positionVsMonthlyDifferenceValue)
+    ?? finiteOrNull(reconcile.positionDifferenceValue)
+    ?? (reconcilePosition - reconcileMonthly);
   const incomeModelLabel = goal.incomeModel === 'consumption' ? 'Consumindo patrimônio' : 'Preservando patrimônio';
   const objectiveLabel = goal.objective === 'wealth' ? 'Patrimônio' : 'Renda';
   const objectiveValue = goal.objective === 'wealth' ? fmt.brl(goal.targetWealth) : `${fmt.brl(goal.desiredIncome)}/mês`;
@@ -3913,8 +4198,8 @@ function renderPage4(data, report, goal) {
             ${renderAssumptionItem('Status', friendlyReconciliationStatus(reconcile.status))}
             ${renderAssumptionItem('Patrimônio pela posição', fmt.brl(reconcile.positionDetailWealth ?? s.currentWealthPositionDetail))}
             ${renderAssumptionItem('Patrimônio mensal consolidado', fmt.brl(reconcile.monthlyPerformanceWealth ?? s.currentWealthMonthlyPerformance ?? s.currentWealthPositionDetail))}
-            ${renderAssumptionItem('Diferença principal', fmt.brl(reconcile.differenceValue || 0))}
-            ${renderAssumptionItem('Série diária', reconcile.dailySeriesStatus === 'not_reconciled' ? 'Não conciliada · excluída dos gráficos' : 'Conciliada')}
+            ${renderAssumptionItem('Diferença principal', fmt.brl(reconcileDifference))}
+            ${renderAssumptionItem('Série diária', ['not_reconciled','unavailable_for_2026-08_not_used','unavailable_for_august_close','unavailable','legacy_not_used'].includes(reconcile.dailySeriesStatus) ? 'Indisponível · não utilizada' : 'Conciliada')}
             ${reconcile.dailyPerformanceWealth != null ? renderAssumptionItem('Patrimônio na série diária', fmt.brl(reconcile.dailyPerformanceWealth)) : ''}
             ${reconcile.dailyDifferenceValue != null ? renderAssumptionItem('Diferença da série diária', fmt.brl(reconcile.dailyDifferenceValue)) : ''}
           </div>
@@ -4312,7 +4597,7 @@ function getPdfFileName() {
 
 
 
-// v31.8 — paginação inteligente para A4 direto, com captura otimizada.
+// v31.12 — paginação inteligente para A4 direto, com captura e layout resilientes.
 // Mantém elementos inteiros na página quando eles cabem na área útil restante;
 // só avança para nova folha quando necessário. O comentário usa fluxo por parágrafo.
 function getSourcePageTitle(page) {
@@ -4445,7 +4730,13 @@ function appendSmartGroup(statePack, group) {
   }
 
   const single = raw[0];
-  if (single?.classList?.contains('grid') && single.children?.length > 1) {
+  const splittableContainerClasses = [
+    'grid', 'motor-layout', 'assumptions-grid', 'income-layout',
+    'income-summary-grid', 'income-type-grid', 'exposure-grid',
+    'goal-detail-grid', 'compact-motor-grid', 'compact-list', 'definition-list'
+  ];
+  const isSplittableContainer = single && splittableContainerClasses.some(cls => single.classList?.contains(cls));
+  if (isSplittableContainer && single.children?.length > 1) {
     Array.from(single.children).forEach((child, idx) => appendSmartGroup(
       statePack,
       makeSubgroupFromNode(child, group.title, group.contextClasses, idx === 0)
@@ -4605,9 +4896,8 @@ function getVisibleReportPages() {
 }
 
 async function captureReportPage(page, isMobile) {
-  // v31.8: A4 usa resolução suficiente para impressão nítida sem rasterizar cada
-  // folha em 2x. Isso reduz bastante CPU, memória e tempo de abertura do PDF.
-  const scale = isMobile ? 2.0 : 1.5;
+  // v31.12: resolução 2x para preservar texto, espaçamento e linhas finas no A4.
+  const scale = 2.0;
   return window.html2canvas(page, {
     scale,
     useCORS: true,
@@ -4623,7 +4913,7 @@ async function captureReportPage(page, isMobile) {
 }
 
 function addCanvasToPdf(pdf, canvas, pageIndex, isMobile) {
-  const imgData = canvas.toDataURL('image/jpeg', isMobile ? 0.92 : 0.90);
+  const imgData = canvas.toDataURL('image/jpeg', isMobile ? 0.94 : 0.97);
 
   if (isMobile) {
     const pdfW = 108;
