@@ -1539,6 +1539,7 @@
     word-spacing: .06em !important;
   }
 </style>
+<link rel="stylesheet" href="./styles/investments.css" />
 </head>
 <body class="auth-pending">
   <section class="login-screen" id="loginScreen">
@@ -1578,8 +1579,16 @@
         <span>Invest · Gestão de clientes</span>
       </div>
       <nav class="sidebar-nav">
+        <div class="sidebar-section-label">Clientes</div>
         <button type="button" class="active" id="navClients" data-page="clients">Clientes</button>
-        <button type="button" id="navReports" data-page="reports">Emitir relatório</button>
+        <button type="button" id="navReports" data-page="reports">Relatórios</button>
+
+        <div class="sidebar-section-label">Investimentos</div>
+        <button type="button" class="nav-subitem" id="navStocks" data-page="stocks">Ações</button>
+        <button type="button" class="nav-subitem nav-disabled" disabled title="Módulo futuro">Renda fixa</button>
+        <button type="button" class="nav-subitem nav-disabled" disabled title="Módulo futuro">FIIs</button>
+        <button type="button" class="nav-subitem nav-disabled" disabled title="Módulo futuro">Fundos</button>
+        <button type="button" class="nav-subitem nav-disabled" disabled title="Módulo futuro">Internacional</button>
       </nav>
       <div class="sidebar-user">
         <div class="sidebar-user-email" id="sidebarUserEmail">—</div>
@@ -1661,6 +1670,104 @@
         </nav>
 
         <div class="profile-loading" id="profileContent">Selecione um cliente na lista.</div>
+      </section>
+
+      <section class="app-page" id="pageStocks">
+        <div class="invest-page" id="stocksModule">
+          <div class="stock-list-view" data-stock-list-view>
+            <div class="page-heading">
+              <div>
+                <h2>Investimentos · Ações</h2>
+                <p>Estante institucional, screening, ranking, carteira teórica e fila de research da LGV Capital.</p>
+              </div>
+              <div class="page-actions">
+                <button class="app-btn" type="button" data-stock-refresh>Recarregar dados</button>
+              </div>
+            </div>
+
+            <div class="stock-data-status">
+              <span class="stock-dot warn"></span>
+              <strong>Modo inicial:</strong> snapshot estrutural local da Política LGV v1.0. Valuation e ordens permanecem pendentes até conexão do LGV Engine auditado.
+            </div>
+
+            <div class="invest-kpis">
+              <div class="invest-kpi"><span>Ativos cadastrados</span><strong data-stock-stat="universe">0</strong></div>
+              <div class="invest-kpi"><span>Estante</span><strong data-stock-stat="shelf">0</strong></div>
+              <div class="invest-kpi"><span>Top 15</span><strong data-stock-stat="top15">0</strong></div>
+              <div class="invest-kpi"><span>Carteira teórica</span><strong data-stock-stat="portfolio">0</strong></div>
+              <div class="invest-kpi"><span>Em Compra · Grau A</span><strong data-stock-stat="buy">0</strong></div>
+              <div class="invest-kpi"><span>Research pendente</span><strong data-stock-stat="research">0</strong></div>
+            </div>
+
+            <div class="invest-tabs">
+              <button class="invest-tab active" type="button" data-stock-tab="shelf">Estante</button>
+              <button class="invest-tab" type="button" data-stock-tab="screener">Screener</button>
+              <button class="invest-tab" type="button" data-stock-tab="top15">Top 15</button>
+              <button class="invest-tab" type="button" data-stock-tab="portfolio">Carteira teórica</button>
+              <button class="invest-tab" type="button" data-stock-tab="research">Research</button>
+            </div>
+
+            <div class="invest-panel">
+              <div class="invest-panel-head">
+                <div>
+                  <h3 data-stock-table-title>Estante LGV</h3>
+                  <p>Clique em uma empresa para abrir o perfil institucional completo do ativo.</p>
+                </div>
+                <div class="invest-filters">
+                  <input class="invest-search" type="search" data-stock-search placeholder="Ticker, empresa ou setor..." />
+                </div>
+              </div>
+              <div class="stock-table-wrap">
+                <table class="stock-table">
+                  <thead><tr>
+                    <th>Ativo</th><th>Setor</th><th>Andar</th><th>Ranking</th><th>Qualidade</th><th>Oportunidade</th><th>PC LGV</th><th>Cotação</th><th>Status</th><th>Auditoria</th>
+                  </tr></thead>
+                  <tbody data-stocks-body></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="stock-detail" data-stock-detail>
+            <button class="stock-detail-back" type="button" data-stock-back>← Voltar para a Estante</button>
+            <div class="stock-hero">
+              <div><h2 data-detail-ticker>—</h2><p data-detail-company>—</p></div>
+              <div class="stock-hero-kpis">
+                <div class="stock-hero-kpi"><span>Andar</span><strong data-detail-floor>—</strong></div>
+                <div class="stock-hero-kpi"><span>Ranking</span><strong data-detail-rank>—</strong></div>
+                <div class="stock-hero-kpi"><span>Auditoria</span><strong data-detail-audit>—</strong></div>
+                <div class="stock-hero-kpi"><span>Status</span><strong data-detail-status>—</strong></div>
+              </div>
+            </div>
+
+            <div class="stock-detail-grid">
+              <section class="stock-detail-card">
+                <h4>Valuation LGV</h4>
+                <div class="stock-detail-row"><span>Cotação</span><strong data-detail-price>—</strong></div>
+                <div class="stock-detail-row"><span>PC LGV</span><strong data-detail-pc>—</strong></div>
+                <div class="stock-detail-row"><span>Valor justo</span><strong data-detail-fair>—</strong></div>
+                <div class="stock-detail-row"><span>Teto de renda</span><strong data-detail-income>—</strong></div>
+              </section>
+              <section class="stock-detail-card">
+                <h4>Scores</h4>
+                <div class="stock-detail-row"><span>Qualidade</span><strong data-detail-quality>—</strong></div>
+                <div class="stock-detail-row"><span>Preço</span><strong data-detail-price-score>—</strong></div>
+                <div class="stock-detail-row"><span>Oportunidade</span><strong data-detail-opportunity>—</strong></div>
+              </section>
+              <section class="stock-detail-card">
+                <h4>Estado institucional</h4>
+                <div class="stock-detail-row"><span>Top 15</span><strong data-detail-top15>—</strong></div>
+                <div class="stock-detail-row"><span>Carteira teórica</span><strong data-detail-portfolio>—</strong></div>
+                <div class="stock-detail-row"><span>Snapshot</span><strong data-detail-snapshot>—</strong></div>
+                <div class="stock-detail-row"><span>Fonte-base</span><strong data-detail-source>—</strong></div>
+              </section>
+            </div>
+
+            <div class="stock-methodology-note">
+              <strong>Trava de execução:</strong> este perfil só poderá mostrar recomendação Compra e gerar quantidade de aporte quando o ativo possuir dados auditados, valuation calculado pelo LGV Engine e Grau A. O snapshot inicial não libera ordens.
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="app-page" id="pageReports">
@@ -5637,6 +5744,7 @@ window.lgvReportSetStatus = setStatus;
 </script>
 
 <script type="module">
+  import { createStocksModule } from "./src/investments/stocks.js";
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
   import {
     getFirestore, collection, doc, getDoc, getDocs, setDoc, serverTimestamp
@@ -5679,8 +5787,10 @@ window.lgvReportSetStatus = setStatus;
     save: document.getElementById('firebaseSave'),
     navClients: document.getElementById('navClients'),
     navReports: document.getElementById('navReports'),
+    navStocks: document.getElementById('navStocks'),
     pageClients: document.getElementById('pageClients'),
     pageClientProfile: document.getElementById('pageClientProfile'),
+    pageStocks: document.getElementById('pageStocks'),
     pageReports: document.getElementById('pageReports'),
     workspaceTitle: document.getElementById('workspaceTitle'),
     workspaceSubtitle: document.getElementById('workspaceSubtitle'),
@@ -5720,6 +5830,12 @@ window.lgvReportSetStatus = setStatus;
   let activeClientDoc = null;
   let activeClientData = null;
   let creatingClient = false;
+  const stocksModule = createStocksModule(document.getElementById('stocksModule'), {
+    onStatus: (message, kind) => {
+      if (appPage === 'stocks') setSyncStatus(message, kind);
+    }
+  });
+  let stocksLoaded = false;
 
   const escapeHtml = value => String(value ?? '')
     .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
@@ -6051,11 +6167,13 @@ window.lgvReportSetStatus = setStatus;
   }
 
   function showPage(page) {
-    appPage = ['clients', 'profile', 'reports'].includes(page) ? page : 'clients';
+    appPage = ['clients', 'profile', 'stocks', 'reports'].includes(page) ? page : 'clients';
     els.pageClients.classList.toggle('active', appPage === 'clients');
     els.pageClientProfile.classList.toggle('active', appPage === 'profile');
+    els.pageStocks.classList.toggle('active', appPage === 'stocks');
     els.pageReports.classList.toggle('active', appPage === 'reports');
     els.navClients.classList.toggle('active', appPage === 'clients' || appPage === 'profile');
+    els.navStocks.classList.toggle('active', appPage === 'stocks');
     els.navReports.classList.toggle('active', appPage === 'reports');
     if (appPage === 'clients') {
       els.workspaceTitle.textContent = 'Clientes';
@@ -6063,6 +6181,11 @@ window.lgvReportSetStatus = setStatus;
     } else if (appPage === 'profile') {
       els.workspaceTitle.textContent = creatingClient ? 'Novo cliente' : (activeClientDoc?.name || activeClientDoc?.clientProfile?.name || 'Perfil do cliente');
       els.workspaceSubtitle.textContent = 'Cadastro nativo, estratégia, aposentadoria, ativos e relatórios.';
+    } else if (appPage === 'stocks') {
+      els.workspaceTitle.textContent = 'Investimentos · Ações';
+      els.workspaceSubtitle.textContent = 'Estante institucional, research, valuation, ranking e carteira teórica.';
+      if (!stocksLoaded) { stocksLoaded = true; stocksModule.load(); }
+      else stocksModule.render();
     } else {
       els.workspaceTitle.textContent = 'Emissão de relatório';
       els.workspaceSubtitle.textContent = 'Importação mensal, revisão, comentário, plano de ação e PDF.';
@@ -6829,6 +6952,7 @@ window.lgvReportSetStatus = setStatus;
       return;
     }
     if (hash === '#novo-cliente') return openNewClient(false);
+    if (hash === '#acoes') return showPage('stocks');
     if (hash === '#relatorios') return showPage('reports');
     navigateClients(false);
   }
@@ -6861,6 +6985,7 @@ window.lgvReportSetStatus = setStatus;
 
   els.logout.addEventListener('click', () => signOut(auth).catch(console.error));
   els.navClients.addEventListener('click', () => navigateClients());
+  els.navStocks.addEventListener('click', () => { showPage('stocks'); routeTo('acoes'); });
   els.navReports.addEventListener('click', () => { hydrateReportClientSelect(); showPage('reports'); routeTo('relatorios'); });
   els.backToClients.addEventListener('click', () => navigateClients());
   els.profileBack.addEventListener('click', () => navigateClients());

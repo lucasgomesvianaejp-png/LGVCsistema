@@ -37,3 +37,36 @@ Atualização focada na diagramação A4 e na robustez de apresentação dos rel
 ## Implantação
 
 Substituir o `index.html` atual pelo arquivo deste pacote e publicar normalmente no Vercel/GitHub.
+
+---
+
+# Atualização — Módulo Institucional de Investimentos
+
+Esta versão inicia a transformação do LGV Capital Sistema em uma plataforma única de clientes + research.
+
+## Incluído
+
+- Nova navegação lateral com grupo **Investimentos**.
+- Novo módulo funcional **Investimentos > Ações**.
+- Abas: Estante, Screener, Top 15, Carteira teórica e Research.
+- Perfil completo de ativo em página, não modal.
+- Snapshot inicial da Política LGV v1.0 para validar a UX sem liberar recomendação financeira.
+- Estrutura modular nova em `src/investments/` e `styles/` sem reescrever o módulo legado de clientes.
+- Schema inicial de research em `supabase/schema.sql`.
+- LGV Engine inicial em Python com regras determinísticas já fechadas e testes automatizados.
+- Arquitetura documentada em `docs/RESEARCH_ARCHITECTURE.md`.
+
+## Segurança da integração de research
+
+O frontend não contém chave `service_role` de Supabase. Nesta fase o banco de research foi desenhado para ser acessado por um backend confiável; Firebase continua responsável pelo login e dados atuais de clientes.
+
+## Estado do módulo Ações
+
+A interface é funcional, porém os campos de valuation aparecem como pendentes. Nenhuma recomendação real é liberada pelo snapshot local. A próxima camada será conectar o LGV Engine e os ingestores auditados ao banco.
+
+## Validação desta versão
+
+- JavaScript do módulo novo: `node --check` aprovado.
+- Dois blocos JavaScript existentes do `index.html`: sintaxe aprovada após integração.
+- IDs HTML duplicados: nenhum encontrado.
+- Testes do LGV Engine: 7/7 aprovados.
