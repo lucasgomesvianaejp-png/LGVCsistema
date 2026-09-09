@@ -39,6 +39,8 @@ function money(value){
   return Number.isFinite(value) ? value.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}) : '—';
 }
 function score(value){ return Number.isFinite(value) ? value.toFixed(2).replace('.',',') : '—'; }
+function percent(value){ return Number.isFinite(value) ? (value*100).toFixed(2).replace('.',',')+'%' : '—'; }
+function compactMoney(value){ return Number.isFinite(value) ? value.toLocaleString('pt-BR',{style:'currency',currency:'BRL',notation:'compact',maximumFractionDigits:1}) : '—'; }
 function escapeHtml(value){ return String(value ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
 
 export function createStocksModule(root, options={}) {
@@ -46,6 +48,9 @@ export function createStocksModule(root, options={}) {
   let activeTab = 'shelf';
   let search = '';
   let detailTicker = '';
+  let meta = { universeCount: null, databaseMode: false, ingestion: [] };
+  let screener = [];
+  let researchQueue = [];
   const onStatus = options.onStatus || (()=>{});
 
   async function load(){
@@ -53,7 +58,13 @@ export function createStocksModule(root, options={}) {
     try {
       if (options.dataProvider) {
         const live = await options.dataProvider();
-        if (Array.isArray(live) && live.length) stocks = live;
+        if (Array.isArray(live) && live.length) { stocks = live; meta.databaseMode = true; }
+        else if (live && Array.isArray(live.stocks)) {
+          if (live.stocks.length) stocks = live.stocks;
+          meta = { ...meta, ...(live.meta || {}), databaseMode: true };
+          if (Array.isArray(live.screener)) screener = live.screener;
+          if (Array.isArray(live.researchQueue)) researchQueue = live.researchQueue;
+        }
       }
       onStatus('Ações carregadas','ok');
     } catch (error) {
@@ -64,30 +75,64 @@ export function createStocksModule(root, options={}) {
   }
 
   function selected(){
-    let list = stocks;
+    let list = activeTab === 'screener' && screener.length ? screener : (activeTab === 'research' && researchQueue.length ? researchQueue : stocks);
     if (activeTab === 'top15') list = list.filter(x=>x.top15);
     if (activeTab === 'portfolio') list = list.filter(x=>x.portfolio);
-    if (activeTab === 'research') list = list.filter(x=>x.auditGrade !== 'A');
-    if (activeTab === 'screener') list = [...list].sort((a,b)=>(a.rank ?? 999)-(b.rank ?? 999));
+    if (activeTab === 'research' && !researchQueue.length) list = list.filter(x=>x.auditGrade !== 'A');
     if (search) {
       const q = search.toLocaleLowerCase('pt-BR');
-      list = list.filter(x=>`${x.ticker} ${x.company} ${x.sector} ${x.floor}`.toLocaleLowerCase('pt-BR').includes(q));
+      list = list.filter(x=>`${x.ticker} ${x.company} ${x.sector || ''} ${x.floor || ''}`.toLocaleLowerCase('pt-BR').includes(q));
     }
     return list;
   }
 
   function renderStats(){
-    root.querySelector('[data-stock-stat="universe"]').textContent = stocks.length;
+    root.querySelector('[data-stock-stat="universe"]').textContent = Number.isFinite(meta.universeCount) ? meta.universeCount : stocks.length;
     root.querySelector('[data-stock-stat="shelf"]').textContent = stocks.length;
     root.querySelector('[data-stock-stat="top15"]').textContent = stocks.filter(x=>x.top15).length;
     root.querySelector('[data-stock-stat="portfolio"]').textContent = stocks.filter(x=>x.portfolio).length;
     root.querySelector('[data-stock-stat="buy"]').textContent = stocks.filter(x=>x.priceStatus==='Compra' && x.auditGrade==='A').length;
-    root.querySelector('[data-stock-stat="research"]').textContent = stocks.filter(x=>x.auditGrade!=='A').length;
+    root.querySelector('[data-stock-stat="research"]').textContent = researchQueue.length || stocks.filter(x=>x.auditGrade!=='A').length;
   }
 
   function renderTable(){
     const list = selected();
     const tbody = root.querySelector('[data-stocks-body]');
+    const head = root.querySelector('[data-stock-head]');
+    if (activeTab === 'research' && researchQueue.length) {
+      head.innerHTML = '<th>Ativo</th><th>Setor</th><th>Prioridade</th><th>Pendência objetiva</th><th>Snapshot</th>';
+      tbody.innerHTML = list.map(x=>{
+        const badge = x.priority==='HIGH' ? 'audit-c' : x.priority==='LOW' ? 'audit-a' : 'pending';
+        return `<tr>
+          <td><div class="stock-ticker">${escapeHtml(x.ticker)}</div><div class="stock-company">${escapeHtml(x.company)}</div></td>
+          <td>${escapeHtml(x.sector)}</td>
+          <td><span class="stock-badge ${badge}">${escapeHtml(x.priority)}</span></td>
+          <td class="stock-company">${escapeHtml(x.reason)}</td>
+          <td>${escapeHtml(x.snapshotDate || '—')}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="5" style="text-align:center;color:#7c8796;padding:28px">Nenhuma pendência automática.</td></tr>';
+      return;
+    }
+    if (activeTab === 'screener' && screener.length) {
+      head.innerHTML = '<th>Ativo</th><th>Setor</th><th>Liquidez 12M</th><th>DY bruto 5A</th><th>Lucro</th><th>Cotação</th><th>Status</th><th>Motivo / próximo passo</th>';
+      tbody.innerHTML = list.map(x=>{
+        const reasons = [...(x.failReasons||[]), ...(x.nearReasons||[])];
+        const label = ({PASS:'Passou pré-filtro',NEAR:'Aproximação',FAIL:'Fora',PENDING:'Pendente'})[x.status] || x.status;
+        const badge = x.status==='PASS' ? 'audit-a' : x.status==='FAIL' ? 'audit-c' : 'pending';
+        return `<tr>
+          <td><div class="stock-ticker">${escapeHtml(x.ticker)}</div><div class="stock-company">${escapeHtml(x.company)}</div></td>
+          <td>${escapeHtml(x.sector)}</td>
+          <td>${compactMoney(x.adtv12m)}</td>
+          <td>${percent(x.dy5y)}</td>
+          <td>${x.profitPositive===true?'Positivo':x.profitPositive===false?'Revisar':'—'}</td>
+          <td>${money(x.marketPrice)}</td>
+          <td><span class="stock-badge ${badge}">${escapeHtml(label)}</span></td>
+          <td class="stock-company">${escapeHtml(reasons.join(' · ') || 'Elegível para próxima etapa quantitativa')}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="8" style="text-align:center;color:#7c8796;padding:28px">Screener ainda não calculado.</td></tr>';
+      return;
+    }
+    head.innerHTML = '<th>Ativo</th><th>Setor</th><th>Andar</th><th>Ranking</th><th>Qualidade</th><th>Oportunidade</th><th>PC LGV</th><th>Cotação</th><th>Status</th><th>Auditoria</th>';
     tbody.innerHTML = list.map(x=>`
       <tr data-stock-open="${escapeHtml(x.ticker)}">
         <td><div class="stock-ticker">${escapeHtml(x.ticker)}</div><div class="stock-company">${escapeHtml(x.company)}</div></td>
@@ -128,8 +173,22 @@ export function createStocksModule(root, options={}) {
     root.querySelector('[data-detail-top15]').textContent = stock.top15 ? 'Sim' : 'Não';
   }
 
+  function renderDataStatus(){
+    const box = root.querySelector('[data-stock-data-status]');
+    if (!box) return;
+    if (!meta.databaseMode) {
+      box.innerHTML = '<span class="stock-dot warn"></span><strong>Modo local:</strong> backend de research indisponível; exibindo snapshot estrutural sem liberar ordens.';
+      return;
+    }
+    const ok = (meta.ingestion || []).filter(x=>x.status==='SUCCESS');
+    const last = ok[0];
+    const when = last?.finished_at ? new Date(last.finished_at).toLocaleString('pt-BR') : 'sem ingestão registrada';
+    box.innerHTML = `<span class="stock-dot ok"></span><strong>LGV Research DB conectado.</strong> Última ingestão concluída: ${escapeHtml(when)}. Valuation só é liberado quando o ativo atingir o grau de auditoria exigido.`;
+  }
+
   function render(){
     renderStats();
+    renderDataStatus();
     root.querySelectorAll('[data-stock-tab]').forEach(btn=>btn.classList.toggle('active',btn.dataset.stockTab===activeTab));
     root.querySelector('[data-stock-table-title]').textContent = ({shelf:'Estante LGV',screener:'Screener',top15:'Top 15',portfolio:'Carteira teórica',research:'Research pendente'})[activeTab] || 'Estante LGV';
     renderTable();
@@ -146,5 +205,5 @@ export function createStocksModule(root, options={}) {
   root.querySelector('[data-stock-search]')?.addEventListener('input', event=>{ search=event.target.value.trim(); renderTable(); });
   root.querySelector('[data-stock-refresh]')?.addEventListener('click', ()=>load());
 
-  return { load, render, getStocks:()=>[...stocks] };
+  return { load, render, getStocks:()=>[...stocks], getMeta:()=>({...meta}) };
 }

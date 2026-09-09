@@ -1685,7 +1685,7 @@
               </div>
             </div>
 
-            <div class="stock-data-status">
+            <div class="stock-data-status" data-stock-data-status>
               <span class="stock-dot warn"></span>
               <strong>Modo inicial:</strong> snapshot estrutural local da Política LGV v1.0. Valuation e ordens permanecem pendentes até conexão do LGV Engine auditado.
             </div>
@@ -1719,7 +1719,7 @@
               </div>
               <div class="stock-table-wrap">
                 <table class="stock-table">
-                  <thead><tr>
+                  <thead><tr data-stock-head>
                     <th>Ativo</th><th>Setor</th><th>Andar</th><th>Ranking</th><th>Qualidade</th><th>Oportunidade</th><th>PC LGV</th><th>Cotação</th><th>Status</th><th>Auditoria</th>
                   </tr></thead>
                   <tbody data-stocks-body></tbody>
@@ -5745,6 +5745,7 @@ window.lgvReportSetStatus = setStatus;
 
 <script type="module">
   import { createStocksModule } from "./src/investments/stocks.js";
+  import { fetchStocksDashboard } from "./src/investments/research-api.js";
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
   import {
     getFirestore, collection, doc, getDoc, getDocs, setDoc, serverTimestamp
@@ -5831,6 +5832,7 @@ window.lgvReportSetStatus = setStatus;
   let activeClientData = null;
   let creatingClient = false;
   const stocksModule = createStocksModule(document.getElementById('stocksModule'), {
+    dataProvider: async () => fetchStocksDashboard(currentUser),
     onStatus: (message, kind) => {
       if (appPage === 'stocks') setSyncStatus(message, kind);
     }

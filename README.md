@@ -70,3 +70,40 @@ A interface é funcional, porém os campos de valuation aparecem como pendentes.
 - Dois blocos JavaScript existentes do `index.html`: sintaxe aprovada após integração.
 - IDs HTML duplicados: nenhum encontrado.
 - Testes do LGV Engine: 7/7 aprovados.
+
+---
+
+# Atualização — Research Data Layer v2
+
+## Implementado
+
+- API server-side `/api/research/stocks` autenticada pelo ID token do Firebase.
+- Supabase permanece invisível ao navegador; `service_role` existe apenas como segredo do servidor/CI.
+- Pipeline Python sem dependências externas para:
+  - B3 COTAHIST;
+  - catálogo B3 / `codeCVM`;
+  - suplemento B3 com proventos e eventos societários;
+  - CVM DFP/ITR;
+  - Tesouro Transparente.
+- Banco expandido com issuers, preços, Tesouro, linhas CVM, dividendos, corporate actions, screening, research e auditoria de ingestão.
+- Screener agora possui tabela própria para o universo, separado da Estante.
+- Pré-screen conservador com `PASS / NEAR / FAIL / PENDING`.
+- GitHub Actions diário e semanal para atualização incremental.
+- Fallback local preservado caso o backend ainda não esteja configurado.
+
+## Configuração do banco
+
+1. Criar um projeto Supabase dedicado ao LGV Research.
+2. Rodar `supabase/schema.sql`.
+3. Rodar `supabase/seed_current_shelf.sql`.
+4. Configurar no Vercel:
+   - `FIREBASE_WEB_API_KEY`
+   - `LGV_ALLOWED_EMAILS`
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+5. Configurar no GitHub:
+   - `LGV_SUPABASE_URL`
+   - `LGV_SUPABASE_SERVICE_ROLE_KEY`
+6. Rodar manualmente `LGV Research Weekly` uma vez para bootstrap e depois `LGV Research Daily`.
+
+O único projeto Supabase atualmente conectado nesta sessão contém tabelas de folha de pagamento (`funcionarios`, `competencias`, `consignados`, `ordens_pagamento`). Por segurança, esta entrega **não gravou tabelas LGV Research nesse projeto existente**.

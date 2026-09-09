@@ -1,0 +1,15 @@
+{
+  "pre_screen_version": "pre-screen-v1.0",
+  "liquidity_min_adtv_brl": 1000000,
+  "liquidity_near_adtv_brl": 1200000,
+  "dy_5y_min": 0.06,
+  "dy_5y_near": 0.055,
+  "complete_years": 5,
+  "excluded_sector_terms": ["varejo", "aviacao", "aviação"],
+  "notes": [
+    "DY do pre-screen usa proventos brutos B3 e preço médio anual do mesmo exercício.",
+    "Abaixo de 5,5% sem evento societário no período é reprovação quantitativa segura; 5,5%-6,0% fica em aproximação.",
+    "Existência de desdobramento/bonificação no período bloqueia eliminação por DY até ajuste do histórico.",
+    "Pré-screen não é Estante, Top 15 nem recomendação de compra."
+  ]
+}
