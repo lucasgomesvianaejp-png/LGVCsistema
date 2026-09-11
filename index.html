@@ -1319,6 +1319,43 @@
     .allocation-bar-row > span:first-child { grid-column: 1 / -1; }
   }
 
+  /* Client dashboard + unlimited observations */
+  .dashboard-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin:18px 0; }
+  .dashboard-kpi { background:#fff; border:1px solid #e8e2d7; border-radius:18px; padding:18px; box-shadow:0 8px 24px rgba(30,41,59,.04); }
+  .dashboard-kpi span { display:block; color:var(--app-muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+  .dashboard-kpi strong { display:block; margin-top:9px; font-size:25px; line-height:1.05; color:var(--app-text); }
+  .dashboard-kpi small { display:block; margin-top:7px; color:var(--app-muted); font-size:12px; line-height:1.35; }
+  .dashboard-grid { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr); gap:16px; align-items:start; }
+  .dashboard-panel { background:#fff; border:1px solid #e8e2d7; border-radius:18px; padding:18px; }
+  .dashboard-panel-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+  .dashboard-panel-head h3 { margin:0 0 4px; font-size:17px; }
+  .dashboard-panel-head p { margin:0; color:var(--app-muted); font-size:13px; }
+  .dashboard-table-wrap { overflow:auto; border:1px solid #eee8dd; border-radius:14px; }
+  .dashboard-table { width:100%; border-collapse:collapse; min-width:680px; }
+  .dashboard-table th,.dashboard-table td { padding:11px 12px; border-bottom:1px solid #f0ece4; text-align:left; font-size:12px; }
+  .dashboard-table th { color:var(--app-muted); font-size:10px; text-transform:uppercase; letter-spacing:.05em; background:#fbfaf7; }
+  .dashboard-table td.num,.dashboard-table th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .dashboard-table tr:last-child td { border-bottom:0; }
+  .birthday-list { display:grid; gap:9px; }
+  .birthday-item { display:flex; gap:11px; align-items:center; padding:11px 12px; border:1px solid #eee8dd; border-radius:13px; background:#fffdfa; }
+  .birthday-day { width:43px; height:43px; border-radius:12px; display:grid; place-items:center; background:#f6ead7; font-weight:800; color:#8a5a22; flex:0 0 auto; }
+  .birthday-item strong { display:block; font-size:13px; }
+  .birthday-item small { display:block; margin-top:2px; color:var(--app-muted); font-size:11px; }
+  .dashboard-empty { color:var(--app-muted); border:1px dashed #d8d0c3; border-radius:13px; padding:18px; text-align:center; font-size:13px; }
+  .observation-form { display:grid; gap:12px; }
+  .observation-actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+  .observations-list { display:grid; gap:12px; margin-top:14px; }
+  .observation-card { border:1px solid #e8e2d7; border-radius:15px; padding:15px; background:#fff; }
+  .observation-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .observation-card h4 { margin:0; font-size:15px; }
+  .observation-card p { margin:10px 0 0; white-space:pre-wrap; line-height:1.55; color:#384152; font-size:13px; }
+  .observation-meta { margin-top:11px; color:var(--app-muted); font-size:10px; }
+  .observation-card-actions { display:flex; gap:6px; flex:0 0 auto; }
+  .observation-card-actions button { border:0; background:#f4f1ea; color:#475569; border-radius:9px; padding:6px 8px; cursor:pointer; font-size:11px; }
+  .observation-card-actions button.danger { color:#b42318; background:#fff1f0; }
+  @media (max-width:1100px) { .dashboard-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard-grid{grid-template-columns:1fr} }
+  @media (max-width:620px) { .dashboard-kpis{grid-template-columns:1fr} }
+
   @media print {
     .login-screen, .app-sidebar, .workspace-topbar, .report-context-bar, #pageClients, #pageClientProfile { display: none !important; }
     .app-shell { display: block !important; }
@@ -1580,7 +1617,8 @@
       </div>
       <nav class="sidebar-nav">
         <div class="sidebar-section-label">Clientes</div>
-        <button type="button" class="active" id="navClients" data-page="clients">Clientes</button>
+        <button type="button" class="active" id="navDashboard" data-page="dashboard">Dashboard</button>
+        <button type="button" id="navClients" data-page="clients">Clientes</button>
         <button type="button" id="navReports" data-page="reports">Relatórios</button>
 
         <div class="sidebar-section-label">Investimentos</div>
@@ -1609,7 +1647,30 @@
         </div>
       </header>
 
-      <section class="app-page active" id="pageClients">
+      <section class="app-page active" id="pageDashboard">
+        <div class="page-heading">
+          <div><h2>Dashboard de clientes</h2><p>Visão consolidada da base, patrimônio sob consultoria, honorários estimados e datas importantes.</p></div>
+          <div class="page-actions"><button class="app-btn" id="refreshDashboard" type="button">Atualizar dashboard</button><button class="app-btn primary" id="dashboardNewClient" type="button">Novo cliente</button></div>
+        </div>
+        <div class="dashboard-kpis">
+          <div class="dashboard-kpi"><span>AUM total</span><strong id="dashAum">R$ 0,00</strong><small id="dashAumDetail">0 clientes com patrimônio disponível</small></div>
+          <div class="dashboard-kpi"><span>Honorários estimados / mês</span><strong id="dashFeesMonthly">R$ 0,00</strong><small id="dashFeesAnnual">R$ 0,00 estimados por ano</small></div>
+          <div class="dashboard-kpi"><span>Clientes na base ativa</span><strong id="dashActiveClients">0</strong><small id="dashAverageAum">AUM médio: R$ 0,00</small></div>
+          <div class="dashboard-kpi"><span>Aniversariantes do mês</span><strong id="dashBirthdayCount">0</strong><small id="dashBirthdayMonth">—</small></div>
+        </div>
+        <div class="dashboard-grid">
+          <section class="dashboard-panel">
+            <div class="dashboard-panel-head"><div><h3>Base de clientes</h3><p>AUM e honorários estimados com a taxa cadastrada em cada perfil.</p></div><span class="pill" id="dashboardBaseStatus">—</span></div>
+            <div class="dashboard-table-wrap"><table class="dashboard-table"><thead><tr><th>Cliente</th><th>Perfil</th><th class="num">AUM</th><th class="num">Taxa a.a.</th><th class="num">Honorários/mês</th><th>Último período</th></tr></thead><tbody id="dashboardClientRows"></tbody></table></div>
+          </section>
+          <section class="dashboard-panel">
+            <div class="dashboard-panel-head"><div><h3>Aniversários</h3><p id="dashboardBirthdaySubtitle">Clientes que fazem aniversário neste mês.</p></div></div>
+            <div class="birthday-list" id="dashboardBirthdayList"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="app-page" id="pageClients">
         <div class="page-heading">
           <div>
             <h2>Área de clientes</h2>
@@ -1663,6 +1724,7 @@
 
         <nav class="profile-tabs" id="profileTabs">
           <button class="profile-tab active" type="button" data-profile-tab="overview">Visão geral</button>
+          <button class="profile-tab" type="button" data-profile-tab="observations">Observações</button>
           <button class="profile-tab" type="button" data-profile-tab="strategy">Perfil e estratégia</button>
           <button class="profile-tab" type="button" data-profile-tab="retirement">Aposentadoria e metas</button>
           <button class="profile-tab" type="button" data-profile-tab="assets">Estante de ativos</button>
@@ -5748,7 +5810,7 @@ window.lgvReportSetStatus = setStatus;
   import { fetchStocksDashboard } from "./src/investments/research-api.js";
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
   import {
-    getFirestore, collection, doc, getDoc, getDocs, setDoc, serverTimestamp
+    getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
   import {
     getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
@@ -5786,15 +5848,31 @@ window.lgvReportSetStatus = setStatus;
     syncDot: document.getElementById('syncDot'),
     logout: document.getElementById('firebaseLogout'),
     save: document.getElementById('firebaseSave'),
+    navDashboard: document.getElementById('navDashboard'),
     navClients: document.getElementById('navClients'),
     navReports: document.getElementById('navReports'),
     navStocks: document.getElementById('navStocks'),
+    pageDashboard: document.getElementById('pageDashboard'),
     pageClients: document.getElementById('pageClients'),
     pageClientProfile: document.getElementById('pageClientProfile'),
     pageStocks: document.getElementById('pageStocks'),
     pageReports: document.getElementById('pageReports'),
     workspaceTitle: document.getElementById('workspaceTitle'),
     workspaceSubtitle: document.getElementById('workspaceSubtitle'),
+    refreshDashboard: document.getElementById('refreshDashboard'),
+    dashboardNewClient: document.getElementById('dashboardNewClient'),
+    dashAum: document.getElementById('dashAum'),
+    dashAumDetail: document.getElementById('dashAumDetail'),
+    dashFeesMonthly: document.getElementById('dashFeesMonthly'),
+    dashFeesAnnual: document.getElementById('dashFeesAnnual'),
+    dashActiveClients: document.getElementById('dashActiveClients'),
+    dashAverageAum: document.getElementById('dashAverageAum'),
+    dashBirthdayCount: document.getElementById('dashBirthdayCount'),
+    dashBirthdayMonth: document.getElementById('dashBirthdayMonth'),
+    dashboardBaseStatus: document.getElementById('dashboardBaseStatus'),
+    dashboardClientRows: document.getElementById('dashboardClientRows'),
+    dashboardBirthdayList: document.getElementById('dashboardBirthdayList'),
+    dashboardBirthdaySubtitle: document.getElementById('dashboardBirthdaySubtitle'),
     refreshClients: document.getElementById('refreshClients'),
     newClientReport: document.getElementById('newClientReport'),
     backToClients: document.getElementById('backToClients'),
@@ -5826,13 +5904,15 @@ window.lgvReportSetStatus = setStatus;
   let clients = [];
   let selectedClientId = '';
   let saveTimer = null;
-  let appPage = 'clients';
+  let appPage = 'dashboard';
   let activeProfileTab = 'overview';
+  let activeClientObservations = [];
+  let editingObservationId = '';
   let activeClientDoc = null;
   let activeClientData = null;
   let creatingClient = false;
   const stocksModule = createStocksModule(document.getElementById('stocksModule'), {
-    dataProvider: async () => fetchStocksDashboard(currentUser),
+    dataProvider: async () => fetchStocksDashboard(db, currentUser),
     onStatus: (message, kind) => {
       if (appPage === 'stocks') setSyncStatus(message, kind);
     }
@@ -6148,6 +6228,7 @@ window.lgvReportSetStatus = setStatus;
       profileStatus: client.profileStatus || '',
       birthDate: client.birthDate || goal.birthDate || '',
       consultingStartDate: client.consultingStartDate || '',
+      advisoryFeeAnnualPct: Number.isFinite(Number(client.advisoryFeeAnnualPct)) ? Number(client.advisoryFeeAnnualPct) : 0.8,
       periods,
       latestPeriod: periods[0] || '',
       reportCount: periods.length,
@@ -6169,25 +6250,30 @@ window.lgvReportSetStatus = setStatus;
   }
 
   function showPage(page) {
-    appPage = ['clients', 'profile', 'stocks', 'reports'].includes(page) ? page : 'clients';
+    appPage = ['dashboard', 'clients', 'profile', 'stocks', 'reports'].includes(page) ? page : 'dashboard';
+    els.pageDashboard.classList.toggle('active', appPage === 'dashboard');
     els.pageClients.classList.toggle('active', appPage === 'clients');
     els.pageClientProfile.classList.toggle('active', appPage === 'profile');
     els.pageStocks.classList.toggle('active', appPage === 'stocks');
     els.pageReports.classList.toggle('active', appPage === 'reports');
+    els.navDashboard.classList.toggle('active', appPage === 'dashboard');
     els.navClients.classList.toggle('active', appPage === 'clients' || appPage === 'profile');
     els.navStocks.classList.toggle('active', appPage === 'stocks');
     els.navReports.classList.toggle('active', appPage === 'reports');
-    if (appPage === 'clients') {
+    if (appPage === 'dashboard') {
+      els.workspaceTitle.textContent = 'Dashboard de clientes';
+      els.workspaceSubtitle.textContent = 'AUM, honorários estimados, aniversários e visão consolidada da base.';
+      renderClientDashboard();
+    } else if (appPage === 'clients') {
       els.workspaceTitle.textContent = 'Clientes';
       els.workspaceSubtitle.textContent = 'Lista geral dos clientes e acesso aos perfis completos.';
     } else if (appPage === 'profile') {
       els.workspaceTitle.textContent = creatingClient ? 'Novo cliente' : (activeClientDoc?.name || activeClientDoc?.clientProfile?.name || 'Perfil do cliente');
-      els.workspaceSubtitle.textContent = 'Cadastro nativo, estratégia, aposentadoria, ativos e relatórios.';
+      els.workspaceSubtitle.textContent = 'Cadastro nativo, observações, estratégia, aposentadoria, ativos e relatórios.';
     } else if (appPage === 'stocks') {
       els.workspaceTitle.textContent = 'Investimentos · Ações';
       els.workspaceSubtitle.textContent = 'Estante institucional, research, valuation, ranking e carteira teórica.';
-      if (!stocksLoaded) { stocksLoaded = true; stocksModule.load(); }
-      else stocksModule.render();
+      if (!stocksLoaded) { stocksLoaded = true; stocksModule.load(); } else stocksModule.render();
     } else {
       els.workspaceTitle.textContent = 'Emissão de relatório';
       els.workspaceSubtitle.textContent = 'Importação mensal, revisão, comentário, plano de ação e PDF.';
@@ -6236,6 +6322,7 @@ window.lgvReportSetStatus = setStatus;
       .sort((a, b) => String(a.name || a.clientProfile?.name || a.id).localeCompare(String(b.name || b.clientProfile?.name || b.id), 'pt-BR'));
     renderClientList();
     updateStats();
+    renderClientDashboard();
     hydrateReportClientSelect();
     setSyncStatus('Dados sincronizados', 'ok');
     els.clientListStatus.textContent = `${clients.length} cliente(s)`;
@@ -6249,6 +6336,62 @@ window.lgvReportSetStatus = setStatus;
     els.statReports.textContent = clients.reduce((total, item) => total + Number(item.reportCount || item.periods?.length || 0), 0);
     els.statGoals.textContent = clients.filter(item => item.goalConfigured || hasMeaningfulObject(item.goal)).length;
     els.statUpdated.textContent = clients.filter(item => String(item.updatedAtIso || '').startsWith(thisMonth)).length;
+  }
+
+  function getClientStatus(item = {}) {
+    return String(item.clientProfile?.status || item.status || 'Ativo').trim() || 'Ativo';
+  }
+
+  function isDashboardClient(item = {}) {
+    return getClientStatus(item).toLocaleLowerCase('pt-BR') !== 'inativo';
+  }
+
+  function getClientFeeAnnualPct(item = {}) {
+    const raw = item.clientProfile?.advisoryFeeAnnualPct ?? item.advisoryFeeAnnualPct ?? 0.8;
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0 ? value : 0.8;
+  }
+
+  function getClientBirthDate(item = {}) { return item.clientProfile?.birthDate || item.birthDate || ''; }
+
+  function dateParts(value) {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return match ? { year:Number(match[1]), month:Number(match[2]), day:Number(match[3]) } : null;
+  }
+
+  function renderClientDashboard() {
+    if (!els.pageDashboard) return;
+    const active = clients.filter(isDashboardClient);
+    const withWealth = active.filter(item => Number.isFinite(Number(item.latestWealth)));
+    const aum = withWealth.reduce((total,item) => total + Math.max(0,Number(item.latestWealth)||0),0);
+    const annualFees = withWealth.reduce((total,item) => total + Math.max(0,Number(item.latestWealth)||0) * getClientFeeAnnualPct(item) / 100,0);
+    const monthlyFees = annualFees / 12;
+    const averageAum = active.length ? aum / active.length : 0;
+    const now = new Date();
+    const month = now.getMonth()+1, year = now.getFullYear();
+    const monthName = now.toLocaleDateString('pt-BR',{month:'long'});
+    const birthdays = active.map(item => ({item,parts:dateParts(getClientBirthDate(item))})).filter(row => row.parts?.month === month).sort((a,b)=>a.parts.day-b.parts.day);
+    els.dashAum.textContent = formatMoney(aum);
+    els.dashAumDetail.textContent = `${withWealth.length} cliente(s) com patrimônio consolidado`;
+    els.dashFeesMonthly.textContent = formatMoney(monthlyFees);
+    const effectivePct = aum > 0 ? annualFees/aum*100 : 0;
+    els.dashFeesAnnual.textContent = `${formatMoney(annualFees)} / ano · taxa média efetiva ${effectivePct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a.`;
+    els.dashActiveClients.textContent = String(active.length);
+    els.dashAverageAum.textContent = `AUM médio: ${formatMoney(averageAum)}`;
+    els.dashBirthdayCount.textContent = String(birthdays.length);
+    els.dashBirthdayMonth.textContent = monthName.charAt(0).toUpperCase()+monthName.slice(1);
+    els.dashboardBaseStatus.textContent = `${active.length} na base ativa`;
+    els.dashboardBirthdaySubtitle.textContent = `Aniversários de ${monthName}.`;
+    const ordered=[...active].sort((a,b)=>(Number(b.latestWealth)||0)-(Number(a.latestWealth)||0));
+    els.dashboardClientRows.innerHTML = ordered.length ? ordered.map(item => {
+      const wealth=Number(item.latestWealth), feePct=getClientFeeAnnualPct(item), monthly=Number.isFinite(wealth)?Math.max(0,wealth)*feePct/100/12:null;
+      const name=item.name||item.clientProfile?.name||item.id, profile=item.profile||item.clientProfile?.profile||'—';
+      return `<tr data-dashboard-client="${escapeAttr(item.id)}" style="cursor:pointer"><td><strong>${escapeHtml(name)}</strong></td><td>${escapeHtml(profile)}</td><td class="num">${Number.isFinite(wealth)?formatMoney(wealth):'—'}</td><td class="num">${feePct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}%</td><td class="num">${monthly!=null?formatMoney(monthly):'—'}</td><td>${escapeHtml(item.latestPeriod?formatPeriod(item.latestPeriod):'—')}</td></tr>`;
+    }).join('') : '<tr><td colspan="6">Nenhum cliente ativo cadastrado.</td></tr>';
+    els.dashboardBirthdayList.innerHTML = birthdays.length ? birthdays.map(({item,parts}) => {
+      const name=item.name||item.clientProfile?.name||item.id, age=year-parts.year, label=`${String(parts.day).padStart(2,'0')}/${String(parts.month).padStart(2,'0')}`;
+      return `<div class="birthday-item" data-dashboard-client="${escapeAttr(item.id)}" style="cursor:pointer"><div class="birthday-day">${String(parts.day).padStart(2,'0')}</div><div><strong>${escapeHtml(name)}</strong><small>${escapeHtml(label)} · completa ${age} anos em ${year}</small></div></div>`;
+    }).join('') : '<div class="dashboard-empty">Nenhum cliente aniversaria neste mês.</div>';
   }
 
   function renderClientList() {
@@ -6293,6 +6436,11 @@ window.lgvReportSetStatus = setStatus;
     history[replace ? 'replaceState' : 'pushState']({}, '', target);
   }
 
+  function navigateDashboard(updateRoute = true) {
+    creatingClient = false; activeClientDoc = null; activeClientData = null; selectedClientId = '';
+    showPage('dashboard'); if (updateRoute) routeTo('dashboard');
+  }
+
   function navigateClients(updateRoute = true) {
     creatingClient = false;
     activeClientDoc = null;
@@ -6310,6 +6458,51 @@ window.lgvReportSetStatus = setStatus;
     return labels[key] || key;
   }
 
+  async function getClientObservations(clientId) {
+    if (!clientId) return [];
+    const snapshot = await getDocs(collection(db, CLIENTS_COLLECTION, clientId, 'observations'));
+    return snapshot.docs.map(item => ({id:item.id,...item.data()})).sort((a,b)=>String(b.updatedAtIso||b.createdAtIso||'').localeCompare(String(a.updatedAtIso||a.createdAtIso||'')));
+  }
+
+  async function reloadClientObservations() {
+    activeClientObservations = selectedClientId ? await getClientObservations(selectedClientId) : [];
+    return activeClientObservations;
+  }
+
+  function renderObservationsTab() {
+    if (creatingClient || !selectedClientId) return `<div class="native-note">Salve o cadastro do cliente primeiro. Depois você poderá adicionar quantas observações quiser, cada uma com título e informação.</div>`;
+    const editing = activeClientObservations.find(item=>item.id===editingObservationId)||null;
+    const cards = activeClientObservations.length ? activeClientObservations.map(item => {
+      const created=item.createdAtIso?new Date(item.createdAtIso).toLocaleString('pt-BR'):'—';
+      const updated=item.updatedAtIso&&item.updatedAtIso!==item.createdAtIso?` · atualizado ${new Date(item.updatedAtIso).toLocaleString('pt-BR')}`:'';
+      return `<article class="observation-card"><div class="observation-card-head"><div><h4>${escapeHtml(item.title||'Sem título')}</h4><div class="observation-meta">criado ${escapeHtml(created)}${escapeHtml(updated)}</div></div><div class="observation-card-actions"><button type="button" data-edit-observation="${escapeAttr(item.id)}">Editar</button><button type="button" class="danger" data-delete-observation="${escapeAttr(item.id)}">Excluir</button></div></div><p>${escapeHtml(item.information||'')}</p></article>`;
+    }).join('') : '<div class="profile-empty">Nenhuma observação cadastrada. Use o formulário acima para criar a primeira.</div>';
+    return `<section class="profile-panel"><div class="profile-panel-head"><div><h3>${editing?'Editar observação':'Nova observação'}</h3><p>Informações livres e permanentes do relacionamento com o cliente.</p></div><span class="profile-tag">${activeClientObservations.length} cadastrada(s)</span></div><form class="observation-form" id="observationForm"><div class="native-field"><label>Título</label><input id="observationTitle" value="${escapeAttr(editing?.title||'')}" placeholder="Ex.: Conta de investimento" required></div><div class="native-field"><label>Informação</label><textarea id="observationInformation" placeholder="Ex.: Itaú">${escapeHtml(editing?.information||'')}</textarea></div><div class="observation-actions">${editing?'<button class="app-btn" type="button" data-cancel-observation>Cancelar edição</button>':''}<button class="app-btn primary" type="button" data-save-observation>${editing?'Salvar alteração':'Adicionar observação'}</button></div></form></section><section class="profile-panel"><div class="profile-panel-head"><div><h3>Observações do cliente</h3><p>Cada item é salvo separadamente no Firestore.</p></div></div><div class="observations-list">${cards}</div></section>`;
+  }
+
+  async function saveObservation() {
+    if (!currentUser || !selectedClientId) throw new Error('Salve o cliente antes de adicionar observações.');
+    const title=document.getElementById('observationTitle')?.value.trim()||'', information=document.getElementById('observationInformation')?.value.trim()||'';
+    if (!title) throw new Error('Informe um título para a observação.');
+    if (!information) throw new Error('Informe o conteúdo da observação.');
+    const existing=activeClientObservations.find(item=>item.id===editingObservationId);
+    const observationId=editingObservationId||(globalThis.crypto?.randomUUID?.()||`obs_${Date.now()}_${Math.random().toString(36).slice(2,8)}`), nowIso=new Date().toISOString();
+    const payload=sanitize({title,information,createdAtIso:existing?.createdAtIso||nowIso,updatedAtIso:nowIso,createdBy:existing?.createdBy||currentUser.email||'',updatedBy:currentUser.email||''});
+    setSyncStatus('Salvando observação...','warn');
+    await setDoc(doc(db,CLIENTS_COLLECTION,selectedClientId,'observations',observationId),{...payload,updatedAt:serverTimestamp()},{merge:true});
+    editingObservationId=''; await reloadClientObservations(); renderProfileTab(); setSyncStatus('Observação salva','ok');
+  }
+
+  async function removeObservation(observationId) {
+    if (!selectedClientId || !observationId) return;
+    const item=activeClientObservations.find(row=>row.id===observationId);
+    if (!window.confirm(`Excluir a observação "${item?.title||'sem título'}"?`)) return;
+    setSyncStatus('Excluindo observação...','warn');
+    await deleteDoc(doc(db,CLIENTS_COLLECTION,selectedClientId,'observations',observationId));
+    if (editingObservationId===observationId) editingObservationId='';
+    await reloadClientObservations(); renderProfileTab(); setSyncStatus('Observação excluída','ok');
+  }
+
   async function openClientProfile(clientId, tab = 'overview', updateRoute = true) {
     if (!currentUser) return;
     creatingClient = false;
@@ -6319,7 +6512,9 @@ window.lgvReportSetStatus = setStatus;
     els.profileContent.innerHTML = '<div class="profile-loading">Carregando perfil completo...</div>';
     setSyncStatus('Carregando cliente...', 'warn');
     try {
-      const [clientDoc, rawData] = await Promise.all([getClientRecord(clientId), getClientData(clientId)]);
+      const [clientDoc, rawData, observations] = await Promise.all([getClientRecord(clientId), getClientData(clientId), getClientObservations(clientId)]);
+      activeClientObservations = observations;
+      editingObservationId = '';
       if (!clientDoc && !rawData) throw new Error('Cliente não encontrado.');
       activeClientDoc = clientDoc || { id:clientId, ...buildMetadata(rawData), ...extractNativeProfile(rawData) };
       if (!activeClientDoc.nativeConfigured && rawData) {
@@ -6355,12 +6550,14 @@ window.lgvReportSetStatus = setStatus;
     activeProfileTab = 'strategy';
     activeClientDoc = {
       id: '', nativeConfigured: true,
-      clientProfile: { name:'', profile:'', profileStatus:'', birthDate:'', consultingStartDate:'', consultor:'Lucas Gomes Viana', status:'Ativo', notes:'' },
+      clientProfile: { name:'', profile:'', profileStatus:'', birthDate:'', consultingStartDate:'', consultor:'Lucas Gomes Viana', status:'Ativo', advisoryFeeAnnualPct:0.8, notes:'' },
       investmentPreferences: { allocationNotes:'', liquidityNeeds:'', restrictions:'', riskNotes:'' },
       allocationPolicy: { effectiveFrom:'', totalWeight:1, targets:[] },
       goal: {}, assetRegistry: []
     };
     activeClientData = null;
+    activeClientObservations = [];
+    editingObservationId = '';
     showPage('profile');
     updateProfileHeader();
     renderProfileTab();
@@ -6386,7 +6583,7 @@ window.lgvReportSetStatus = setStatus;
   }
 
   function setProfileTab(tab) {
-    activeProfileTab = ['overview','strategy','retirement','assets','reports'].includes(tab) ? tab : 'overview';
+    activeProfileTab = ['overview','observations','strategy','retirement','assets','reports'].includes(tab) ? tab : 'overview';
     els.profileTabs.querySelectorAll('[data-profile-tab]').forEach(button => {
       button.classList.toggle('active', button.dataset.profileTab === activeProfileTab);
     });
@@ -6400,6 +6597,7 @@ window.lgvReportSetStatus = setStatus;
     });
     const renderers = {
       overview: renderOverviewTab,
+      observations: renderObservationsTab,
       strategy: renderStrategyTab,
       retirement: renderRetirementTab,
       assets: renderAssetsTab,
@@ -6452,6 +6650,7 @@ window.lgvReportSetStatus = setStatus;
               <div class="profile-summary-row"><span>Perfil de investidor</span><strong>${escapeHtml(profile.profile || '—')}</strong></div>
               <div class="profile-summary-row"><span>Nascimento</span><strong>${escapeHtml(formatDate(profile.birthDate))}</strong></div>
               <div class="profile-summary-row"><span>Início da consultoria</span><strong>${escapeHtml(formatDate(profile.consultingStartDate))}</strong></div>
+              <div class="profile-summary-row"><span>Honorários</span><strong>${getClientFeeAnnualPct({clientProfile:profile}).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a.</strong></div>
               <div class="profile-summary-row"><span>Último relatório</span><strong>${escapeHtml(formatPeriod(reportInfo.period))}</strong></div>
               <div class="profile-summary-row"><span>Relatórios disponíveis</span><strong>${getPeriods(data).length}</strong></div>
             </div>
@@ -6508,6 +6707,7 @@ window.lgvReportSetStatus = setStatus;
             <div class="native-field"><label>Perfil de investidor</label><input id="nativeInvestorProfile" value="${escapeAttr(profile.profile || '')}" placeholder="Conservador, moderado, arrojado..."></div>
             <div class="native-field"><label>Status do perfil</label><input id="nativeProfileStatus" value="${escapeAttr(profile.profileStatus || '')}" placeholder="Ex.: em revisão"></div>
             <div class="native-field"><label>Consultor</label><input id="nativeConsultant" value="${escapeAttr(profile.consultor || 'Lucas Gomes Viana')}"></div>
+            <div class="native-field"><label>Honorários (% a.a.)</label><input id="nativeAdvisoryFee" type="number" min="0" step="0.01" value="${escapeAttr(profile.advisoryFeeAnnualPct ?? 0.8)}" placeholder="0,80"></div>
             <div class="native-field full"><label>Observações do cadastro</label><textarea id="nativeNotes">${escapeHtml(profile.notes || '')}</textarea></div>
             <div class="native-field full"><label>Preferências de alocação</label><textarea id="nativeAllocationNotes" placeholder="Preferências, prioridades e critérios para novos aportes.">${escapeHtml(preferences.allocationNotes || '')}</textarea></div>
             <div class="native-field"><label>Necessidade de liquidez</label><textarea id="nativeLiquidityNeeds">${escapeHtml(preferences.liquidityNeeds || '')}</textarea></div>
@@ -6626,6 +6826,7 @@ window.lgvReportSetStatus = setStatus;
       profile: document.getElementById('nativeInvestorProfile')?.value.trim() || '',
       profileStatus: document.getElementById('nativeProfileStatus')?.value.trim() || '',
       consultor: document.getElementById('nativeConsultant')?.value.trim() || 'Lucas Gomes Viana',
+      advisoryFeeAnnualPct: numberFromInput('nativeAdvisoryFee') === '' ? 0.8 : numberFromInput('nativeAdvisoryFee'),
       notes: document.getElementById('nativeNotes')?.value.trim() || ''
     };
   }
@@ -6946,7 +7147,7 @@ window.lgvReportSetStatus = setStatus;
 
   function handleRoute() {
     if (!currentUser) return;
-    const hash = decodeURIComponent(window.location.hash || '#clientes');
+    const hash = decodeURIComponent(window.location.hash || '#dashboard');
     if (hash.startsWith('#cliente/')) {
       const clientId = hash.slice('#cliente/'.length);
       if (clientId && clientId !== selectedClientId) openClientProfile(clientId, activeProfileTab, false);
@@ -6954,9 +7155,11 @@ window.lgvReportSetStatus = setStatus;
       return;
     }
     if (hash === '#novo-cliente') return openNewClient(false);
+    if (hash === '#dashboard') return navigateDashboard(false);
     if (hash === '#acoes') return showPage('stocks');
     if (hash === '#relatorios') return showPage('reports');
-    navigateClients(false);
+    if (hash === '#clientes') return navigateClients(false);
+    navigateDashboard(false);
   }
 
   els.loginForm.addEventListener('submit', async event => {
@@ -6986,11 +7189,16 @@ window.lgvReportSetStatus = setStatus;
   });
 
   els.logout.addEventListener('click', () => signOut(auth).catch(console.error));
+  els.navDashboard.addEventListener('click', () => navigateDashboard());
   els.navClients.addEventListener('click', () => navigateClients());
   els.navStocks.addEventListener('click', () => { showPage('stocks'); routeTo('acoes'); });
   els.navReports.addEventListener('click', () => { hydrateReportClientSelect(); showPage('reports'); routeTo('relatorios'); });
   els.backToClients.addEventListener('click', () => navigateClients());
   els.profileBack.addEventListener('click', () => navigateClients());
+  els.refreshDashboard.addEventListener('click', () => refreshClientList().catch(handleCloudError));
+  els.dashboardNewClient.addEventListener('click', () => openNewClient());
+  els.dashboardClientRows.addEventListener('click', event => { const id=event.target.closest('[data-dashboard-client]')?.dataset.dashboardClient; if(id) openClientProfile(id).catch(handleCloudError); });
+  els.dashboardBirthdayList.addEventListener('click', event => { const id=event.target.closest('[data-dashboard-client]')?.dataset.dashboardClient; if(id) openClientProfile(id).catch(handleCloudError); });
   els.refreshClients.addEventListener('click', () => refreshClientList().catch(handleCloudError));
   els.newClientReport.addEventListener('click', () => openNewClient());
   els.clientSearch.addEventListener('input', renderClientList);
@@ -7069,6 +7277,10 @@ window.lgvReportSetStatus = setStatus;
   els.profileContent.addEventListener('click', event => {
     const goTab = event.target.closest('[data-go-tab]')?.dataset.goTab;
     if (goTab) return setProfileTab(goTab);
+    if (event.target.closest('[data-save-observation]')) { saveObservation().catch(handleCloudError); return; }
+    if (event.target.closest('[data-cancel-observation]')) { editingObservationId=''; renderProfileTab(); return; }
+    const editObservation=event.target.closest('[data-edit-observation]')?.dataset.editObservation; if(editObservation){ editingObservationId=editObservation; renderProfileTab(); return; }
+    const deleteObservation=event.target.closest('[data-delete-observation]')?.dataset.deleteObservation; if(deleteObservation){ removeObservation(deleteObservation).catch(handleCloudError); return; }
     if (event.target.closest('[data-add-allocation]')) {
       document.getElementById('allocationRows')?.insertAdjacentHTML('beforeend', allocationRow());
       updateAllocationTotal();
@@ -7150,7 +7362,7 @@ window.lgvReportSetStatus = setStatus;
     try {
       await refreshClientList();
       window.lgvClearReportWorkspaceData?.();
-      if (!window.location.hash) routeTo('clientes', true);
+      if (!window.location.hash) routeTo('dashboard', true);
       handleRoute();
     } catch (error) {
       handleCloudError(error);

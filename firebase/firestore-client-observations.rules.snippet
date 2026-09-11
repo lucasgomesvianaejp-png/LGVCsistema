@@ -1,0 +1,5 @@
+// Mesclar dentro de `match /databases/{database}/documents { ... }` nas regras atuais.
+// Mantém as observações fora do documento principal do cliente para permitir crescimento independente.
+match /clients/{clientId}/observations/{observationId} {
+  allow read, create, update, delete: if request.auth != null;
+}

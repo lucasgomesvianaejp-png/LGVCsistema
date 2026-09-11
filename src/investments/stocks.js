@@ -182,8 +182,8 @@ export function createStocksModule(root, options={}) {
     }
     const ok = (meta.ingestion || []).filter(x=>x.status==='SUCCESS');
     const last = ok[0];
-    const when = last?.finished_at ? new Date(last.finished_at).toLocaleString('pt-BR') : 'sem ingestão registrada';
-    box.innerHTML = `<span class="stock-dot ok"></span><strong>LGV Research DB conectado.</strong> Última ingestão concluída: ${escapeHtml(when)}. Valuation só é liberado quando o ativo atingir o grau de auditoria exigido.`;
+    const when = last?.finishedAt ? new Date(last.finishedAt).toLocaleString('pt-BR') : 'sem ingestão registrada';
+    box.innerHTML = `<span class="stock-dot ok"></span><strong>LGV Research · Firebase conectado.</strong> Última ingestão concluída: ${escapeHtml(when)}. Valuation só é liberado quando o ativo atingir o grau de auditoria exigido.`;
   }
 
   function render(){

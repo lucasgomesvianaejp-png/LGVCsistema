@@ -1,19 +1,9 @@
-async function authHeaders(user) {
-  if (!user?.getIdToken) throw new Error('Usuário não autenticado');
-  const token = await user.getIdToken();
-  return { Authorization: `Bearer ${token}` };
-}
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-export async function fetchStocksDashboard(user) {
-  const response = await fetch('/api/research/stocks', {
-    method: 'GET',
-    headers: await authHeaders(user),
-    cache: 'no-store'
-  });
-  if (!response.ok) {
-    let message = `Research API ${response.status}`;
-    try { message = (await response.json()).error || message; } catch {}
-    throw new Error(message);
-  }
-  return response.json();
+export async function fetchStocksDashboard(db, user) {
+  if (!db || !user) throw new Error('Firebase indisponível ou usuário não autenticado');
+  const snap = await getDoc(doc(db, 'researchDashboard', 'current'));
+  if (!snap.exists()) throw new Error('Research ainda não foi inicializado no Firestore');
+  const data = snap.data() || {};
+  return { ...data, meta: { ...(data.meta || {}), databaseMode: true } };
 }

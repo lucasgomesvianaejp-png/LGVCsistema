@@ -1,0 +1,17 @@
+// MESCLAR com as regras atuais do projeto lvg-invest; não substitua regras de clients/clientData sem revisão.
+// Admin SDK usado pelo GitHub Actions ignora estas regras e continua podendo escrever.
+match /researchDashboard/{document} {
+  allow read: if request.auth != null;
+  allow write: if false;
+}
+match /researchAssets/{document} { allow read: if request.auth != null; allow write: if false; }
+match /researchMarket/{document} { allow read: if request.auth != null; allow write: if false; }
+match /researchDividends/{document} { allow read: if request.auth != null; allow write: if false; }
+match /researchCorporateActions/{document} { allow read: if request.auth != null; allow write: if false; }
+match /researchFundamentals/{document} { allow read: if request.auth != null; allow write: if false; }
+match /researchTreasury/{document} { allow read: if request.auth != null; allow write: if false; }
+match /researchScreening/{document} { allow read: if request.auth != null; allow write: if false; }
+match /researchScreeningSnapshots/{document} { allow read: if request.auth != null; allow write: if false; }
+match /researchValuations/{document} { allow read: if request.auth != null; allow write: if false; }
+match /researchIngestionRuns/{document} { allow read: if request.auth != null; allow write: if false; }
+match /researchMeta/{document} { allow read: if request.auth != null; allow write: if false; }
