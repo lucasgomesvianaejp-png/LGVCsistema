@@ -72,10 +72,7 @@ Mensagem visual:
 - `Período AAAA-MM atualizado com sucesso.` quando o mês já existia;
 - `Período AAAA-MM adicionado com sucesso.` quando é um mês novo.
 
-## v4.4 — relatórios por fonte
 
-- mantém o relatório MyProfit existente como renderizador legado;
-- adiciona relatório dedicado para `source.provider = Investidor10`;
-- relatório Investidor10 prioriza fotografia patrimonial, evolução, posição x alvo, motores, classes e rentabilidades disponíveis na fonte;
-- resultado mensal por classe/motor deixa de ser requisito para esse tipo de relatório;
-- suporta snapshots parciais, como posição em 05/10, sem reclassificá-los como fechamento mensal.
+## v4.5 — relatório Investidor10 no formato cliente
+
+O relatório de fonte Investidor10 foi simplificado para o padrão de comunicação já utilizado com clientes: capa, comentário, resumo executivo, distribuição da carteira e performance dos ativos. O relatório MyProfit permanece preservado. Veja `FIX_INVESTIDOR10_CLIENT_REPORT_V4_5.md`.

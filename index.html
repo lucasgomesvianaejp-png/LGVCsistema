@@ -380,6 +380,31 @@
     .firebase-help { margin: 9px 0 0; color: #5d6a61; font-size: 11px; line-height: 1.35; }
     .btn:disabled, .select-box:disabled { cursor: not-allowed; opacity: .55; transform: none !important; box-shadow: none !important; }
 
+
+
+    /* V4.5 — relatório Investidor10 simplificado, inspirado no modelo histórico enviado ao cliente */
+    .i10-cover-page { background: var(--black); color: white; border-top: 10px solid var(--gold); }
+    .i10-cover-inner { min-height: 920px; padding: 92px 72px; display:flex; flex-direction:column; justify-content:center; }
+    .i10-cover-kicker { color: var(--gold); font-weight: 900; letter-spacing: .12em; text-transform: uppercase; font-size: 14px; }
+    .i10-cover-title { font-size: 48px; line-height: 1.02; letter-spacing: -.04em; margin: 18px 0 18px; max-width: 850px; }
+    .i10-cover-client { font-size: 23px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; margin: 0 0 12px; }
+    .i10-cover-period { color: #d8d8d8; font-size: 16px; }
+    .i10-cover-signature { margin-top: 80px; color: #bdbdbd; font-size: 13px; }
+    .i10-summary-copy { margin-top: 18px; font-size: 14px; line-height: 1.65; color: #454545; }
+    .i10-summary-copy p { margin: 0 0 12px; }
+    .i10-allocation-wrap { display:grid; grid-template-columns: 280px 1fr; gap: 22px; align-items:center; }
+    .i10-donut { width: 205px; height: 205px; border-radius:50%; margin: 4px auto 14px; position:relative; }
+    .i10-donut::after { content:""; position:absolute; inset:48px; background:#fff; border-radius:50%; box-shadow:inset 0 0 0 1px var(--border); }
+    .i10-legend { display:grid; gap:7px; font-size:12px; }
+    .i10-legend-row { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+    .i10-legend-label { display:flex; align-items:center; gap:8px; min-width:0; }
+    .i10-legend-swatch { width:10px; height:10px; border-radius:3px; flex:0 0 auto; }
+    .i10-allocation-table td:first-child, .i10-asset-table td:first-child { font-weight: 750; }
+    .i10-group-row td { background:#f4efe5; color:#5c5142; font-weight:900 !important; text-transform:uppercase; letter-spacing:.035em; font-size:11px; }
+    .i10-summary-lines { display:grid; gap:8px; margin-top:14px; }
+    .i10-summary-line { display:flex; justify-content:space-between; gap:18px; padding:10px 12px; border-radius:10px; background:#fffaf1; border:1px solid #f0dfbe; }
+    .i10-summary-line strong { white-space:nowrap; }
+
     @media (max-width: 920px) {
       .control-grid, .grid.two, .grid.three, .grid.four, .kpi-grid, .motor-layout, .assumptions-grid, .income-summary-grid.four-cards { grid-template-columns: 1fr; }
       .header-inner, .report-head, .report-toolbar { flex-direction: column; align-items: flex-start; }
@@ -414,6 +439,16 @@
         background: #fbfaf7 !important;
       }
       .report-page:last-child { break-after: auto !important; page-break-after: auto !important; }
+      .report-page.i10-cover-page { background: var(--black) !important; color: white !important; }
+      .i10-cover-page .i10-cover-inner { min-height: 297mm !important; padding: 32mm 20mm !important; }
+      .i10-cover-page .i10-cover-title { font-size: 34px !important; }
+      .i10-cover-page .i10-cover-client { font-size: 16px !important; }
+      .i10-cover-page .i10-cover-period { font-size: 11px !important; }
+      .i10-allocation-wrap { grid-template-columns: 52mm 1fr !important; gap: 5mm !important; }
+      .i10-donut { width: 42mm !important; height: 42mm !important; }
+      .i10-donut::after { inset: 10mm !important; }
+      .i10-summary-copy { font-size: 9.5px !important; line-height: 1.48 !important; margin-top: 4mm !important; }
+
       .report-head { padding: 5mm 10mm 5mm !important; border-top-width: 2.2mm !important; flex: 0 0 auto; align-items: flex-start !important; }
       .report-head .brand { font-size: 20px !important; }
       .report-head .subtitle { margin-top: 3px !important; }
@@ -1994,7 +2029,7 @@
   </div>
 
 <script>
-// LGV Invest V4.3 — suporte a snapshots Investidor10 + indisponibilidade sem falso zero
+// LGV Invest V4.5 — relatório Investidor10 no modelo cliente LGV + comentário
 const REPORT_BLOCKS = [
   { key: 'wealth', label: 'Patrimônio consolidado' },
   { key: 'summaryCards', label: 'Cards de resumo' },
@@ -3080,112 +3115,224 @@ function i10Pct(value, fallback='—') {
   return n === null ? fallback : fmt.pct(n);
 }
 
-function renderI10EquityRows(rows) {
-  if (!Array.isArray(rows) || !rows.length) return '<div class="muted">Histórico patrimonial não disponível.</div>';
-  return `<table class="table"><thead><tr><th>Referência</th><th style="text-align:right">Patrimônio</th><th style="text-align:right">Valor aplicado</th><th style="text-align:right">Ganho de capital</th><th style="text-align:right">Situação</th></tr></thead><tbody>${rows.map(r => `
-    <tr><td>${escapeHtml(r.label || r.period || '—')}</td><td style="text-align:right"><strong>${fmt.brl(r.wealth || 0)}</strong></td><td style="text-align:right">${fmt.brl(r.investedValue || 0)}</td><td style="text-align:right">${fmt.brl(r.capitalGain || 0)}</td><td style="text-align:right">${r.isPartial ? '<span class="pill warn">parcial</span>' : '<span class="pill ok">fechado</span>'}</td></tr>`).join('')}</tbody></table>`;
+function i10PeriodDescription(report) {
+  const partial = !!report?.isPartialSnapshot || !!report?.investidor10?.isPartialSnapshot;
+  if (partial) return `Snapshot analisado: ${fmt.date(report.positionFinalDate || report.periodEnd)}`;
+  if (report?.periodStart && report?.periodEnd) return `Período analisado: ${fmt.date(report.periodStart)} - ${fmt.date(report.periodEnd)}`;
+  return `Referência: ${fmt.month(state.selectedPeriod)}`;
 }
 
-function renderI10StrategicTable(rows, kind='class') {
-  if (!Array.isArray(rows) || !rows.length) return '<div class="muted">Sem dados suficientes.</div>';
-  const labelFor = r => kind === 'motor' ? motorShortLabel(r.strategicFunction) : (CLASS_LABELS[r.classLGV] || r.classLGV || '—');
-  return `<table class="table"><thead><tr><th>${kind === 'motor' ? 'Motor LGV' : 'Classe LGV'}</th><th style="text-align:right">Atual</th><th style="text-align:right">Peso</th><th style="text-align:right">Alvo R$</th><th style="text-align:right">Alvo %</th><th style="text-align:right">Dif. R$</th><th style="text-align:right">Dif. p.p.</th><th style="text-align:right">Acum. s/ custo</th></tr></thead><tbody>${rows.map(r => {
-    const current = finiteNumber(r.currentValue) || 0;
-    const targetWeight = finiteNumber(r.targetWeight);
-    const targetValue = finiteNumber(r.targetValue) ?? (targetWeight === null ? null : targetWeight * (finiteNumber(r.portfolioWealth) || 0));
-    const diffValue = finiteNumber(r.differenceValue) ?? (targetValue === null ? null : current - targetValue);
-    const capitalReturn = finiteNumber(r.capitalReturnOnCost);
-    const cls = capitalReturn === null ? '' : (capitalReturn >= 0 ? 'positive' : 'negative');
-    return `<tr><td><strong>${escapeHtml(labelFor(r))}</strong></td><td style="text-align:right">${fmt.brl(current)}</td><td style="text-align:right">${fmt.pct(r.currentWeight || 0)}</td><td style="text-align:right">${targetValue === null ? '—' : fmt.brl(targetValue)}</td><td style="text-align:right">${targetWeight === null ? '—' : fmt.pct(targetWeight)}</td><td style="text-align:right">${diffValue === null ? '—' : fmt.brl(diffValue)}</td><td style="text-align:right">${r.differenceWeight == null ? '—' : fmt.pp(r.differenceWeight)}</td><td style="text-align:right" class="${capitalReturn === null ? 'muted' : `value-${cls}`}">${capitalReturn === null ? '—' : fmt.pct(capitalReturn)}</td></tr>`;
-  }).join('')}</tbody></table>`;
+function i10ClientFeeAnnualPct(data) {
+  const raw = data?.client?.advisoryFeeAnnualPct ?? data?.client?.feeAnnualPct ?? data?.advisoryFeeAnnualPct ?? 0.8;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 0.8;
 }
 
-function renderI10PositionTable(rows) {
-  if (!Array.isArray(rows) || !rows.length) return '<div class="muted">Posições não disponíveis.</div>';
-  return `<table class="table"><thead><tr><th>Ativo</th><th>Classe LGV</th><th style="text-align:right">Valor atual</th><th style="text-align:right">Peso</th><th style="text-align:right">Alvo</th><th style="text-align:right">Variação</th><th style="text-align:right">Rentab. fonte</th></tr></thead><tbody>${rows.map(p => {
-    const variation = finiteNumber(p.sourceVariation);
-    const rent = finiteNumber(p.sourceSnapshotReturn);
-    return `<tr><td><strong>${escapeHtml(p.assetName || p.assetId || '—')}</strong><div class="row-sub">${escapeHtml(p.type || p.sourceCategory || '')}</div></td><td>${escapeHtml(CLASS_LABELS[p.classLGV] || p.classLGV || '—')}</td><td style="text-align:right">${fmt.brl(p.marketValue || 0)}</td><td style="text-align:right">${fmt.pct(p.weight || p.currentWeight || 0)}</td><td style="text-align:right">${p.sourceTargetWeight == null ? '—' : fmt.pct(p.sourceTargetWeight)}</td><td style="text-align:right" class="${variation === null ? 'muted' : (variation >= 0 ? 'value-positive' : 'value-negative')}">${variation === null ? '—' : fmt.pct(variation)}</td><td style="text-align:right" class="${rent === null ? 'muted' : (rent >= 0 ? 'value-positive' : 'value-negative')}">${rent === null ? '—' : fmt.pct(rent)}</td></tr>`;
-  }).join('')}</tbody></table>`;
+function i10ClassLabel(key) {
+  return CLASS_LABELS[key] || key || '—';
 }
 
-function renderI10SourceGroups(rows) {
-  if (!Array.isArray(rows) || !rows.length) return '<div class="muted">Sem dados de rentabilidade por grupo.</div>';
-  return `<table class="table"><thead><tr><th>Grupo Investidor10</th><th style="text-align:right">Valor atual</th><th style="text-align:right">Peso</th><th style="text-align:right">Variação</th><th style="text-align:right">Rentabilidade</th></tr></thead><tbody>${rows.map(r => `<tr><td><strong>${escapeHtml(r.label || '—')}</strong></td><td style="text-align:right">${r.currentValue == null ? '—' : fmt.brl(r.currentValue)}</td><td style="text-align:right">${r.currentWeight == null ? '—' : fmt.pct(r.currentWeight)}</td><td style="text-align:right">${r.variation == null ? '—' : fmt.pct(r.variation)}</td><td style="text-align:right"><strong>${r.snapshotReturn == null ? '—' : fmt.pct(r.snapshotReturn)}</strong></td></tr>`).join('')}</tbody></table>`;
+function renderI10Cover(data, report) {
+  const clientName = data?.client?.name || 'Cliente';
+  const partial = !!report?.isPartialSnapshot || !!report?.investidor10?.isPartialSnapshot;
+  return `
+  <section class="report-page i10-cover-page" id="i10Cover">
+    <div class="i10-cover-inner">
+      <div class="i10-cover-kicker">LGV Capital</div>
+      <h1 class="i10-cover-title">${partial ? 'Relatório de Investimentos' : 'Relatório Mensal de Investimentos'}</h1>
+      <div class="i10-cover-client">${escapeHtml(clientName)}</div>
+      <div class="i10-cover-period">${escapeHtml(i10PeriodDescription(report))}</div>
+      <div class="i10-cover-signature">Consultoria e acompanhamento de investimentos · LGV Capital</div>
+    </div>
+  </section>`;
+}
+
+function i10ExecutiveNarrative(data, report) {
+  const s = report?.summary || {};
+  const partial = !!report?.isPartialSnapshot || !!report?.investidor10?.isPartialSnapshot;
+  const wealth = finiteNumber(s.currentWealthPositionDetail);
+  const invested = finiteNumber(s.investedValue);
+  const gain = finiteNumber(s.capitalGain);
+  const accumulated = finiteNumber(s.accumulatedReturnOfficial ?? s.totalReturnOfficial);
+  const periodReturn = finiteNumber(s.periodReturnOfficial);
+  const cdi = finiteNumber(state.market?.cdi?.[state.selectedPeriod]?.value ?? s.cdiReturn);
+  const feePct = i10ClientFeeAnnualPct(data);
+  const fee = wealth === null ? null : wealth * feePct / 100 / 12;
+  if (partial) {
+    const change = finiteNumber(s.wealthChangeSincePreviousMonthEndPercent);
+    return `<p>Na posição de <strong>${fmt.date(report.positionFinalDate || report.periodEnd)}</strong>, a carteira apresenta patrimônio de <strong>${wealth === null ? '—' : fmt.brl(wealth)}</strong>${accumulated === null ? '' : ` e rentabilidade total de <strong>${fmt.pct(accumulated)}</strong>`}. ${change === null ? '' : `Desde o último fechamento mensal disponível, o patrimônio avançou <strong>${fmt.pct(change)}</strong>.`}</p>
+    <p>O valor aplicado informado pelo Investidor10 é de <strong>${invested === null ? '—' : fmt.brl(invested)}</strong>${gain === null ? '' : `, com ganho de capital acumulado de <strong>${fmt.brl(gain)}</strong>`}. Como outubro ainda está em andamento, esta leitura é um <strong>snapshot parcial</strong> e não substitui o fechamento mensal.</p>
+    <p>Considerando a taxa cadastrada de <strong>${feePct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a.</strong>, os honorários mensais estimados sobre o patrimônio atual são de <strong>${fee === null ? '—' : fmt.brl(fee)}</strong>.</p>`;
+  }
+  const vsCdi = periodReturn !== null && cdi !== null ? periodReturn - cdi : null;
+  return `<p>No período, a carteira apresentou rentabilidade de <strong>${periodReturn === null ? '—' : fmt.pct(periodReturn)}</strong>${cdi === null ? '' : `, enquanto o CDI ficou em <strong>${fmt.pct(cdi)}</strong>`}${vsCdi === null ? '' : `. A diferença foi de <strong>${fmt.pp(vsCdi)}</strong>`}.</p>
+  <p>O patrimônio encerrou o período em <strong>${wealth === null ? '—' : fmt.brl(wealth)}</strong>${gain === null ? '' : `, com ganho de capital acumulado de <strong>${fmt.brl(gain)}</strong>`}. A estratégia continua sendo acompanhada pela distribuição entre as classes e pela aderência às metas definidas.</p>
+  <p>Com taxa de <strong>${feePct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a.</strong>, os honorários estimados para o mês são de <strong>${fee === null ? '—' : fmt.brl(fee)}</strong>.</p>`;
+}
+
+function renderI10ExecutiveSummary(data, report) {
+  const s = report.summary || {};
+  const partial = !!report.isPartialSnapshot || !!report.investidor10?.isPartialSnapshot;
+  const wealth = finiteNumber(s.currentWealthPositionDetail);
+  const gain = finiteNumber(s.capitalGain);
+  const accumulated = finiteNumber(s.accumulatedReturnOfficial ?? s.totalReturnOfficial);
+  const periodReturn = finiteNumber(s.periodReturnOfficial);
+  const cdi = finiteNumber(state.market?.cdi?.[state.selectedPeriod]?.value ?? s.cdiReturn);
+  const feePct = i10ClientFeeAnnualPct(data);
+  const fee = wealth === null ? null : wealth * feePct / 100 / 12;
+  const primaryReturn = partial ? accumulated : periodReturn;
+  const primaryLabel = partial ? 'Rentabilidade total' : 'Rentabilidade';
+  const primaryHint = partial ? 'Acumulada no Investidor10' : 'Performance do período';
+  const benchmarkDiff = !partial && primaryReturn !== null && cdi !== null ? primaryReturn - cdi : null;
+  const secondLabel = benchmarkDiff !== null ? `vs. CDI (${fmt.pct(cdi)})` : 'Ganho de capital';
+  const secondValue = benchmarkDiff !== null ? fmt.pp(benchmarkDiff) : (gain === null ? '—' : fmt.brl(gain));
+  const secondHint = benchmarkDiff !== null ? (benchmarkDiff >= 0 ? 'Acima do benchmark' : 'Abaixo do benchmark') : 'Acumulado no snapshot';
+  return `
+  <section class="report-page" id="i10Executive">
+    ${renderHead('Resumo executivo', data, report)}
+    <div class="report-body">
+      <div class="grid two">
+        <div class="metric-card"><div class="metric-label">${escapeHtml(primaryLabel)}</div><div class="metric-value ${primaryReturn !== null && primaryReturn >= 0 ? 'value-positive' : ''}">${primaryReturn === null ? '—' : fmt.pct(primaryReturn)}</div><div class="metric-hint">${escapeHtml(primaryHint)}</div></div>
+        <div class="metric-card"><div class="metric-label">${escapeHtml(secondLabel)}</div><div class="metric-value ${benchmarkDiff !== null ? (benchmarkDiff >= 0 ? 'value-positive' : 'value-negative') : (gain !== null && gain >= 0 ? 'value-positive' : '')}">${secondValue}</div><div class="metric-hint">${escapeHtml(secondHint)}</div></div>
+        <div class="metric-card"><div class="metric-label">Patrimônio</div><div class="metric-value">${wealth === null ? '—' : fmt.brl(wealth)}</div><div class="metric-hint">Total acompanhado</div></div>
+        <div class="metric-card"><div class="metric-label">Honorários LGV</div><div class="metric-value">${fee === null ? '—' : fmt.brl(fee)}</div><div class="metric-hint">${feePct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a. · estimativa mensal</div></div>
+      </div>
+      <div class="section-title">Análise de performance</div>
+      <div class="chart-card i10-summary-copy">${i10ExecutiveNarrative(data, report)}</div>
+      ${partial ? '<div class="note-card" style="margin-top:14px;"><strong>Leitura parcial</strong><p>O mês ainda não está fechado. Rentabilidade mensal oficial, comparação mensal com CDI e honorários definitivos devem ser confirmados no fechamento.</p></div>' : ''}
+    </div>${renderFooter()}
+  </section>`;
+}
+
+function i10DonutGradient(rows) {
+  const palette = ['#f0a51d','#6b5cff','#3ca370','#cf5c78','#55a8d8'];
+  let cursor = 0;
+  const pieces = [];
+  (rows || []).forEach((r, i) => {
+    const w = Math.max(0, Number(r.currentWeight) || 0) * 100;
+    const next = cursor + w;
+    pieces.push(`${palette[i % palette.length]} ${cursor.toFixed(4)}% ${next.toFixed(4)}%`);
+    cursor = next;
+  });
+  if (cursor < 100) pieces.push(`#eee7da ${cursor.toFixed(4)}% 100%`);
+  return pieces.join(', ');
+}
+
+function i10AllocationNarrative(rows) {
+  if (!Array.isArray(rows) || !rows.length) return 'A alocação por classe não está disponível.';
+  const ordered = rows.map(r => ({...r, diff: (Number(r.currentWeight)||0) - (Number(r.targetWeight)||0)}));
+  const rf = ordered.find(r => r.classLGV === 'renda_fixa');
+  const under = [...ordered].sort((a,b)=>a.diff-b.diff).filter(r=>r.diff < -0.0025).slice(0,2);
+  const over = [...ordered].sort((a,b)=>b.diff-a.diff).filter(r=>r.diff > 0.0025).slice(0,2);
+  let text = rf ? `A Renda Fixa representa <strong>${fmt.pct(rf.currentWeight || 0)}</strong> da carteira, frente à meta de <strong>${fmt.pct(rf.targetWeight || 0)}</strong>. ` : '';
+  if (under.length) text += `As principais posições abaixo da meta são ${under.map(r=>`<strong>${escapeHtml(i10ClassLabel(r.classLGV))}</strong> (${fmt.pct(r.currentWeight||0)} vs. ${fmt.pct(r.targetWeight||0)})`).join(' e ')}. `;
+  if (over.length) text += `Acima da meta, destacam-se ${over.map(r=>`<strong>${escapeHtml(i10ClassLabel(r.classLGV))}</strong> (${fmt.pct(r.currentWeight||0)} vs. ${fmt.pct(r.targetWeight||0)})`).join(' e ')}. `;
+  text += 'Os ajustes podem ser conduzidos gradualmente com os próximos aportes, evitando movimentações desnecessárias.';
+  return text;
+}
+
+function renderI10Allocation(data, report) {
+  const rows = report.allocationByClass || [];
+  const palette = ['#f0a51d','#6b5cff','#3ca370','#cf5c78','#55a8d8'];
+  const legend = rows.map((r,i)=>`<div class="i10-legend-row"><span class="i10-legend-label"><span class="i10-legend-swatch" style="background:${palette[i%palette.length]}"></span>${escapeHtml(i10ClassLabel(r.classLGV))}</span><strong>${fmt.pct(r.currentWeight||0)}</strong></div>`).join('');
+  const table = `<table class="table i10-allocation-table"><thead><tr><th>Categoria</th><th class="num">Valor atual</th><th class="num">Atual</th><th class="num">Meta</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHtml(i10ClassLabel(r.classLGV))}</td><td class="num">${fmt.brl(r.currentValue||0)}</td><td class="num"><strong>${fmt.pct(r.currentWeight||0)}</strong></td><td class="num">${fmt.pct(r.targetWeight||0)}</td></tr>`).join('')}</tbody></table>`;
+  return `
+  <section class="report-page" id="i10Allocation">
+    ${renderHead('Distribuição da carteira', data, report)}
+    <div class="report-body">
+      <div class="section-title" style="margin-top:0;">Alocação atual vs. meta estratégica</div>
+      <div class="chart-card">
+        <div class="i10-allocation-wrap">
+          <div><div class="i10-donut" style="background:conic-gradient(${i10DonutGradient(rows)})"></div><div class="i10-legend">${legend}</div></div>
+          <div>${table}</div>
+        </div>
+      </div>
+      <div class="section-title">Leitura da alocação</div>
+      <div class="note-card"><p>${i10AllocationNarrative(rows)}</p></div>
+    </div>${renderFooter()}
+  </section>`;
+}
+
+function i10PositionDisplayValue(p) {
+  const source = finiteNumber(p?.sourceMarketValue);
+  return source === null ? finiteNumber(p?.marketValue) : source;
+}
+
+function i10AssetAlias(p) {
+  const id = String(p?.assetId || p?.ticker || p?.assetName || '').toUpperCase();
+  if (id === 'IVVB11') return 'IVVB11 (Internacional)';
+  if (id === 'DIVO11') return 'DIVO11 (Nacional)';
+  if (id === 'GOLD11') return 'GOLD11 (Ouro)';
+  if (id === 'BTC') return 'Bitcoin (BTC)';
+  return p?.assetName || p?.assetId || '—';
+}
+
+function renderI10AssetPerformance(data, report) {
+  const s = report.summary || {};
+  const sourceGroups = report.sourceGroupPerformance || [];
+  const positions = (data.positions || []).filter(p => p.referencePeriod === state.selectedPeriod || p.date === report.positionFinalDate);
+  const group = label => sourceGroups.find(r => String(r.label||'').toLowerCase() === label.toLowerCase());
+  const byCategory = cat => positions.filter(p => String(p.sourceCategory || p.type || '').toLowerCase() === cat.toLowerCase());
+  const treasury = byCategory('Tesouro Direto');
+  const etfs = byCategory('ETFs');
+  const crypto = byCategory('Criptomoedas');
+  const rfGroup = group('Renda Fixa');
+  const rows = [];
+  if (rfGroup) {
+    rows.push(`<tr class="i10-group-row"><td colspan="4">Renda Fixa</td></tr>`);
+    rows.push(`<tr><td>CDB Itaú 100% CDI</td><td>Renda Fixa</td><td class="num ${finiteNumber(rfGroup.snapshotReturn) >= 0 ? 'value-positive' : 'value-negative'}"><strong>${rfGroup.snapshotReturn == null ? '—' : fmt.pct(rfGroup.snapshotReturn)}</strong></td><td class="num">${rfGroup.currentValue == null ? '—' : fmt.brl(rfGroup.currentValue)}</td></tr>`);
+  }
+  if (treasury.length) {
+    rows.push(`<tr class="i10-group-row"><td colspan="4">Tesouro Direto</td></tr>`);
+    treasury.forEach(p => rows.push(`<tr><td>${escapeHtml(i10AssetAlias(p))}</td><td>Tesouro Direto</td><td class="num ${finiteNumber(p.sourceSnapshotReturn) >= 0 ? 'value-positive' : 'value-negative'}"><strong>${p.sourceSnapshotReturn == null ? '—' : fmt.pct(p.sourceSnapshotReturn)}</strong></td><td class="num">${i10PositionDisplayValue(p) == null ? '—' : fmt.brl(i10PositionDisplayValue(p))}</td></tr>`));
+  }
+  if (etfs.length) {
+    rows.push(`<tr class="i10-group-row"><td colspan="4">ETFs</td></tr>`);
+    etfs.forEach(p => rows.push(`<tr><td>${escapeHtml(i10AssetAlias(p))}</td><td>ETFs</td><td class="num ${finiteNumber(p.sourceSnapshotReturn) >= 0 ? 'value-positive' : 'value-negative'}"><strong>${p.sourceSnapshotReturn == null ? '—' : fmt.pct(p.sourceSnapshotReturn)}</strong></td><td class="num">${i10PositionDisplayValue(p) == null ? '—' : fmt.brl(i10PositionDisplayValue(p))}</td></tr>`));
+  }
+  if (crypto.length) {
+    rows.push(`<tr class="i10-group-row"><td colspan="4">Criptomoedas</td></tr>`);
+    crypto.forEach(p => rows.push(`<tr><td>${escapeHtml(i10AssetAlias(p))}</td><td>Criptomoedas</td><td class="num ${finiteNumber(p.sourceSnapshotReturn) >= 0 ? 'value-positive' : 'value-negative'}"><strong>${p.sourceSnapshotReturn == null ? '—' : fmt.pct(p.sourceSnapshotReturn)}</strong></td><td class="num">${i10PositionDisplayValue(p) == null ? '—' : fmt.brl(i10PositionDisplayValue(p))}</td></tr>`));
+  }
+  const wealth = finiteNumber(s.currentWealthPositionDetail);
+  const gain = finiteNumber(s.capitalGain);
+  return `
+  <section class="report-page" id="i10Assets">
+    ${renderHead(`Performance dos ativos e perspectivas · ${fmt.date(report.positionFinalDate || report.periodEnd)}`, data, report)}
+    <div class="report-body">
+      <div class="chart-card"><table class="table i10-asset-table"><thead><tr><th>Ativo</th><th>Grupo</th><th class="num">Rentabilidade</th><th class="num">Valor atual</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
+      <div class="section-title">Resumo consolidado</div>
+      <div class="i10-summary-lines">
+        <div class="i10-summary-line"><span>Patrimônio total</span><strong>${wealth === null ? '—' : fmt.brl(wealth)}</strong></div>
+        <div class="i10-summary-line"><span>Ganho total acumulado</span><strong class="${gain !== null && gain >= 0 ? 'value-positive' : 'value-negative'}">${gain === null ? '—' : fmt.brl(gain)}</strong></div>
+      </div>
+      <div class="chart-subtitle" style="margin-top:10px;">Rentabilidades preservadas conforme exibidas pelo Investidor10 no snapshot selecionado.</div>
+    </div>${renderFooter()}
+  </section>`;
 }
 
 function renderInvestidor10Report(data, report) {
   const root = document.getElementById('reportRoot');
   const summary = report.summary || {};
-  const i10 = report.investidor10 || {};
-  const partial = !!report.isPartialSnapshot || !!i10.isPartialSnapshot;
+  const partial = !!report.isPartialSnapshot || !!report.investidor10?.isPartialSnapshot;
   const wealth = finiteNumber(summary.currentWealthPositionDetail) || 0;
-  const invested = finiteNumber(summary.investedValue);
-  const gain = finiteNumber(summary.capitalGain);
-  const accumulated = finiteNumber(summary.accumulatedReturnOfficial ?? summary.totalReturnOfficial);
-  const wealthChange = finiteNumber(summary.wealthChangeSincePreviousMonthEnd);
-  const wealthChangePct = finiteNumber(summary.wealthChangeSincePreviousMonthEndPercent);
-  const classes = (report.allocationByClass || []).map(r => ({...r, portfolioWealth: wealth}));
-  const motors = (report.motors || []).map(r => ({...r, portfolioWealth: wealth}));
-  const history = i10.equityHistory || report.equityHistory || [];
-  const sourceGroups = report.sourceGroupPerformance || [];
-  const currentPositions = (data.positions || []).filter(p => p.referencePeriod === state.selectedPeriod || p.date === report.positionFinalDate);
 
-  document.getElementById('reportSubtitle').textContent = `${data.client?.name || 'Cliente'} · Investidor10 · snapshot ${fmt.date(report.positionFinalDate || report.periodEnd)}${partial ? ' · parcial' : ''}`;
+  document.getElementById('reportSubtitle').textContent = `${data.client?.name || 'Cliente'} · Investidor10 · ${partial ? 'snapshot parcial' : 'relatório mensal'} · ${fmt.date(report.positionFinalDate || report.periodEnd)}`;
   const cdiPill = document.getElementById('cdiPill');
   const ipcaPill = document.getElementById('ipcaPill');
   const reconcilePill = document.getElementById('reconcilePill');
   if (cdiPill) cdiPill.textContent = 'Fonte: Investidor10';
-  if (ipcaPill) ipcaPill.textContent = partial ? 'Snapshot parcial' : 'Snapshot fechado';
+  if (ipcaPill) ipcaPill.textContent = partial ? 'Posição parcial' : 'Período fechado';
   if (reconcilePill) {
     reconcilePill.className = 'pill ok';
     reconcilePill.textContent = `Patrimônio: ${fmt.brl(wealth)}`;
   }
 
-  const pages = [];
-  pages.push(`
-    <section class="report-page" id="i10Page1">
-      ${renderHead('Carteira consolidada · Investidor10', data, report)}
-      <div class="report-body">
-        <div class="section-title" style="margin-top:0;">Fotografia da carteira</div>
-        <div class="grid four">
-          <div class="metric-card"><div class="metric-label">Patrimônio</div><div class="metric-value">${fmt.brl(wealth)}</div><div class="metric-hint">${partial ? 'Posição parcial em ' : 'Posição em '}${fmt.date(report.positionFinalDate || report.periodEnd)}</div></div>
-          <div class="metric-card"><div class="metric-label">Valor aplicado</div><div class="metric-value">${invested === null ? '—' : fmt.brl(invested)}</div><div class="metric-hint">Base exibida pelo Investidor10</div></div>
-          <div class="metric-card"><div class="metric-label">Ganho de capital</div><div class="metric-value ${gain !== null && gain >= 0 ? 'value-positive' : ''}">${gain === null ? '—' : fmt.brl(gain)}</div><div class="metric-hint">Acumulado no snapshot</div></div>
-          <div class="metric-card"><div class="metric-label">Rentabilidade acumulada</div><div class="metric-value ${accumulated !== null && accumulated >= 0 ? 'value-positive' : ''}">${accumulated === null ? '—' : fmt.pct(accumulated)}</div><div class="metric-hint">Rentabilidade total da fonte</div></div>
-        </div>
-        ${wealthChange !== null ? `<div class="chart-card" style="margin-top:14px;"><div class="chart-title">Movimento desde o último fechamento mensal</div><div class="chart-subtitle">Variação patrimonial entre o fechamento anterior disponível e o snapshot atual; não é rotulada como rentabilidade mensal oficial.</div><div class="grid two" style="margin-top:10px;"><div class="metric-card"><div class="metric-label">Variação em R$</div><div class="metric-value value-positive">${fmt.brl(wealthChange)}</div></div><div class="metric-card"><div class="metric-label">Variação patrimonial</div><div class="metric-value value-positive">${wealthChangePct === null ? '—' : fmt.pct(wealthChangePct)}</div></div></div></div>` : ''}
-        <div class="section-title">Evolução do patrimônio</div>
-        <div class="chart-card"><div class="chart-subtitle">Valores capturados diretamente do gráfico do Investidor10.</div>${renderI10EquityRows(history)}</div>
-        <div class="section-title">Rentabilidade disponível na fonte</div>
-        <div class="chart-card"><div class="chart-subtitle">Mantém a classificação original do Investidor10. Não é convertida artificialmente em rentabilidade mensal por classe LGV.</div>${renderI10SourceGroups(sourceGroups)}</div>
-      </div>${renderFooter()}
-    </section>`);
-
-  pages.push(`
-    <section class="report-page" id="i10Page2">
-      ${renderHead('Estratégia LGV · posição e alvo', data, report)}
-      <div class="report-body">
-        <div class="section-title" style="margin-top:0;">Classes LGV</div>
-        <div class="chart-card"><div class="chart-subtitle">A classificação econômica LGV é aplicada sobre os ativos do Investidor10. O acumulado sobre custo é uma variação patrimonial calculada a partir dos lotes de compra visíveis, não a rentabilidade oficial do consolidador.</div>${renderI10StrategicTable(classes, 'class')}</div>
-        <div class="section-title">Motores da carteira</div>
-        <div class="chart-card"><div class="chart-subtitle">Valor atual, peso, alvo e desvio por função estratégica. O sistema não exige resultado mensal por motor para gerar este relatório.</div>${renderI10StrategicTable(motors, 'motor')}</div>
-      </div>${renderFooter()}
-    </section>`);
-
-  pages.push(`
-    <section class="report-page" id="i10Page3">
-      ${renderHead('Posições da carteira · Investidor10', data, report)}
-      <div class="report-body">
-        <div class="section-title" style="margin-top:0;">Ativos</div>
-        <div class="chart-card"><div class="chart-subtitle">Rentabilidade e variação são preservadas conforme exibidas pela fonte no snapshot. Os valores usados para consolidação LGV seguem os totais oficiais de cada grupo, com reconciliação proporcional quando as linhas do site não fecham exatamente com o cartão do grupo.</div>${renderI10PositionTable(currentPositions)}</div>
-        <div class="section-title">Leitura da fonte</div>
-        <div class="chart-card"><div class="compact-list">
-          <div class="result-row"><div class="result-top"><span>Resultado mensal por classe LGV</span><span class="muted">Não é exigido neste modelo</span></div><div class="row-sub">O relatório Investidor10 foi desenhado para usar posição, custo, alocação, rentabilidade acumulada da fonte e histórico patrimonial, sem fabricar decomposição mensal inexistente.</div></div>
-          <div class="result-row"><div class="result-top"><span>Resultado mensal por motor</span><span class="muted">Não é exigido neste modelo</span></div><div class="row-sub">Os motores são acompanhados por valor atual, peso, alvo, desvio e variação acumulada sobre custo visível.</div></div>
-        </div></div>
-      </div>${renderFooter()}
-    </section>`);
+  const pages = [renderI10Cover(data, report)];
+  if (isBlockEnabled('comment')) pages.push(...renderCommentPages(data, report));
+  pages.push(renderI10ExecutiveSummary(data, report));
+  pages.push(renderI10Allocation(data, report));
+  pages.push(renderI10AssetPerformance(data, report));
 
   root.innerHTML = pages.join('');
   state.currentData = data;
