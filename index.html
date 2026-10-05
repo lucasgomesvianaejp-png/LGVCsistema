@@ -1990,7 +1990,7 @@
   </div>
 
 <script>
-// LGV Invest V4 — desempenho mensal consolidado e auditoria da série diária
+// LGV Invest V4.3 — suporte a snapshots Investidor10 + indisponibilidade sem falso zero
 const REPORT_BLOCKS = [
   { key: 'wealth', label: 'Patrimônio consolidado' },
   { key: 'summaryCards', label: 'Cards de resumo' },
@@ -3051,10 +3051,10 @@ function renderReport() {
   const goalCalc = calcGoal(report);
   const cdi = report.summary.cdiReturn;
   const reconcile = report.reconciliation || {};
-  const recClass = reconcile.status === 'acceptable' ? 'ok' : (reconcile.status === 'acceptable_with_reservation' ? 'warn' : (Math.abs(reconcile.differencePercent || 0) <= .01 ? 'warn' : 'bad'));
+  const recClass = ['acceptable','acceptable_source_snapshot'].includes(reconcile.status) ? 'ok' : (['acceptable_with_reservation','source_snapshot_with_reservation'].includes(reconcile.status) ? 'warn' : (Math.abs(reconcile.differencePercent || 0) <= .01 ? 'warn' : 'bad'));
   document.getElementById('reconcilePill').className = `pill ${recClass}`;
   document.getElementById('reconcilePill').textContent = `Conciliação: ${friendlyReconciliationStatus(reconcile.status)} (${fmt.pct(reconcile.differencePercent || 0)})`;
-  document.getElementById('reportSubtitle').textContent = `${client.name || 'Cliente'} · ${fmt.month(state.selectedPeriod)} · data-base ${fmt.date(report.periodEnd)}`;
+  document.getElementById('reportSubtitle').textContent = `${client.name || 'Cliente'} · ${fmt.month(state.selectedPeriod)} · posição ${fmt.date(report.positionFinalDate || report.periodEnd)}`;
 
   const pages = [];
   const incomeData = normalizeIncomeData(data, report);
@@ -3085,7 +3085,7 @@ function renderHead(title, data, report) {
       <div class="client-meta">
         <strong>${escapeHtml(client.name || 'Cliente')}</strong>
         Perfil: ${escapeHtml(client.profile || '—')}<br />
-        Data-base: ${fmt.date(report.periodEnd)}
+        Data-base da posição: ${fmt.date(report.positionFinalDate || report.periodEnd)}
       </div>
     </div>`;
 }
@@ -3183,14 +3183,37 @@ function getPositionsAtDate(data, date) {
 
 function getAccumulatedPositionGain(data, report) {
   const rows = getPositionsAtDate(data, report.positionFinalDate || report.periodEnd);
-  return rows.reduce((sum, p) => sum + (Number(p.gainValue) || 0), 0);
+  const gains = rows.map(p => finiteNumber(p.gainValue)).filter(value => value !== null);
+  if (!gains.length) return null;
+  return gains.reduce((sum, value) => sum + value, 0);
 }
 
 function getAccumulatedPositionReturn(data, report) {
   const rows = getPositionsAtDate(data, report.positionFinalDate || report.periodEnd);
-  const gain = rows.reduce((sum, p) => sum + (Number(p.gainValue) || 0), 0);
-  const invested = rows.reduce((sum, p) => sum + (Number(p.investedValue) || 0), 0);
+  const gains = rows.map(p => finiteNumber(p.gainValue)).filter(value => value !== null);
+  const investedValues = rows.map(p => finiteNumber(p.investedValue)).filter(value => value !== null);
+  if (!gains.length || !investedValues.length) return null;
+  const gain = gains.reduce((sum, value) => sum + value, 0);
+  const invested = investedValues.reduce((sum, value) => sum + value, 0);
   return invested ? gain / invested : null;
+}
+
+function resultUnavailable(value, status) {
+  const normalizedStatus = String(status || '').toLowerCase();
+  if (['unavailable','not_available','indisponivel','indisponível'].includes(normalizedStatus)) return true;
+  return value === null || value === undefined || value === '' || !Number.isFinite(Number(value));
+}
+
+function unavailableLabel(displayValue = '') {
+  return escapeHtml(displayValue || 'Não disponível na fonte');
+}
+
+function moneyOrUnavailable(value, status, displayValue = '') {
+  return resultUnavailable(value, status) ? `<span class="muted">${unavailableLabel(displayValue)}</span>` : fmt.brl(value);
+}
+
+function pctOrUnavailable(value, status, displayValue = '') {
+  return resultUnavailable(value, status) ? `<span class="muted">${unavailableLabel(displayValue)}</span>` : fmt.pct(value);
 }
 
 function getEquityCurve(data, report) {
@@ -3275,15 +3298,19 @@ function getAccumulatedMotorGain(data, report) {
   const positionDate = report.positionFinalDate || report.periodEnd;
   const fnByAsset = getAssetStrategicFunctionMap(data, report);
   const totals = {};
+  const available = {};
   getPositionsAtDate(data, positionDate).forEach(p => {
-    const key = canonicalMotorKey(fnByAsset[p.assetId] || 'sem_funcao');
-    totals[key] = (totals[key] || 0) + (Number(p.gainValue) || 0);
+    const gain = finiteNumber(p.gainValue);
+    if (gain === null) return;
+    const key = canonicalMotorKey(fnByAsset[p.assetId] || p.strategicFunction || 'sem_funcao');
+    totals[key] = (totals[key] || 0) + gain;
+    available[key] = true;
   });
-  return totals;
+  return { totals, available };
 }
 
 function getMotorRowsWithResults(data, report) {
-  const accumulatedByMotor = getAccumulatedMotorGain(data, report);
+  const accumulatedAudit = getAccumulatedMotorGain(data, report);
   const base = {};
 
   const ensure = key => {
@@ -3293,9 +3320,14 @@ function getMotorRowsWithResults(data, report) {
         strategicFunction: canonical,
         currentValue: 0,
         currentWeight: 0,
+        targetWeight: null,
+        differenceWeight: null,
         initialValue: 0,
-        periodResult: 0,
-        accumulatedResult: accumulatedByMotor[canonical] || 0
+        periodResult: null,
+        periodResultStatus: 'unavailable',
+        periodResultDisplay: 'Não disponível na fonte',
+        accumulatedResult: null,
+        accumulatedResultAvailable: false
       };
     }
     return base[canonical];
@@ -3305,52 +3337,81 @@ function getMotorRowsWithResults(data, report) {
     const row = ensure(m.strategicFunction);
     row.currentValue += Number(m.currentValue) || 0;
     row.currentWeight += Number(m.currentWeight) || 0;
-    if (!(report.assetResults || []).length) row.periodResult += Number(m.periodResult) || 0;
+    const target = finiteNumber(m.targetWeight);
+    if (target !== null) row.targetWeight = (row.targetWeight || 0) + target;
+    const difference = finiteNumber(m.differenceWeight);
+    if (difference !== null) row.differenceWeight = (row.differenceWeight || 0) + difference;
+    row.periodResultStatus = m.periodResultStatus || row.periodResultStatus;
+    row.periodResultDisplay = m.periodResultDisplay || row.periodResultDisplay;
+    if (!(report.assetResults || []).length) {
+      const result = finiteNumber(m.periodResult);
+      if (result !== null && !resultUnavailable(m.periodResult, m.periodResultStatus)) {
+        row.periodResult = (row.periodResult || 0) + result;
+        row.periodResultStatus = 'available';
+      }
+    }
+    const accumulated = finiteNumber(m.accumulatedResult);
+    if (accumulated !== null && m.accumulatedResultAvailable !== false) {
+      row.accumulatedResult = accumulated;
+      row.accumulatedResultAvailable = true;
+    }
   });
 
   (report.assetResults || []).forEach(a => {
     const row = ensure(a.strategicFunction || 'sem_funcao');
-    row.initialValue += Number(a.initialValue) || 0;
-    row.periodResult += Number(a.periodResult) || 0;
+    const initial = finiteNumber(a.initialValue);
+    if (initial !== null) row.initialValue += initial;
+    const result = finiteNumber(a.periodResult);
+    if (result !== null && !resultUnavailable(a.periodResult, a.periodResultStatus)) {
+      row.periodResult = (row.periodResult || 0) + result;
+      row.periodResultStatus = 'available';
+    }
   });
 
-  Object.keys(accumulatedByMotor).forEach(key => {
+  Object.keys(accumulatedAudit.totals).forEach(key => {
     const canonical = canonicalMotorKey(key);
-    ensure(canonical).accumulatedResult = accumulatedByMotor[canonical] || 0;
+    const row = ensure(canonical);
+    row.accumulatedResult = accumulatedAudit.totals[canonical];
+    row.accumulatedResultAvailable = !!accumulatedAudit.available[canonical];
   });
 
   return Object.values(base).map(r => ({
     ...r,
-    periodReturn: r.initialValue ? r.periodResult / r.initialValue : null
+    differenceWeight: r.differenceWeight ?? (r.targetWeight !== null ? r.currentWeight - r.targetWeight : null),
+    periodReturn: r.initialValue && !resultUnavailable(r.periodResult, r.periodResultStatus) ? r.periodResult / r.initialValue : null
   })).sort((a,b) => motorOrderKey(a) - motorOrderKey(b));
 }
 
 function renderMotorRows(rows) {
   const ordered = [...(rows || [])].sort((a,b) => motorOrderKey(a) - motorOrderKey(b));
   const max = Math.max(...ordered.map(r => r.currentWeight || 0), .01);
-  const totalResult = ordered.reduce((sum, r) => sum + (Number(r.periodResult) || 0), 0);
+  const availableResults = ordered.filter(r => !resultUnavailable(r.periodResult, r.periodResultStatus));
+  const totalResult = availableResults.reduce((sum, r) => sum + Number(r.periodResult), 0);
   return ordered.map(r => {
     const pct = r.currentWeight || 0;
     const width = Math.max(2, (pct / max) * 100);
-    const cls = (r.periodResult || 0) >= 0 ? 'positive' : 'negative';
+    const unavailable = resultUnavailable(r.periodResult, r.periodResultStatus);
+    const cls = unavailable ? '' : (Number(r.periodResult) >= 0 ? 'positive' : 'negative');
+    const targetText = r.targetWeight === null ? '' : ` · alvo ${fmt.pct(r.targetWeight)} · dif. ${fmt.pp(r.differenceWeight || 0)}`;
     return `<div class="motor-row">
       <div class="motor-top"><span>${escapeHtml(motorShortLabel(r.strategicFunction))}</span><span class="motor-pct">${fmt.pct(pct)}</span></div>
       <div class="mini-bars"><div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div></div>
-      <div class="row-sub">${fmt.brl(r.currentValue || 0)} alocados · ${fmt.pct(pct)} da carteira</div>
-      <div class="motor-result primary"><span>Resultado no mês</span><strong class="value-${cls}">${fmt.brl(r.periodResult || 0)}</strong></div>
-      <div class="motor-result"><span>Rentabilidade aprox.</span><strong class="value-${cls}">${r.periodReturn === null ? '—' : fmt.pct(r.periodReturn)}</strong></div>
+      <div class="row-sub">${fmt.brl(r.currentValue || 0)} alocados · ${fmt.pct(pct)} da carteira${targetText}</div>
+      <div class="motor-result primary"><span>Resultado no mês</span><strong class="${unavailable ? 'muted' : `value-${cls}`}">${unavailable ? unavailableLabel(r.periodResultDisplay) : fmt.brl(r.periodResult)}</strong></div>
+      <div class="motor-result"><span>Rentabilidade aprox.</span><strong class="${unavailable ? 'muted' : `value-${cls}`}">${unavailable ? unavailableLabel(r.periodResultDisplay) : (r.periodReturn === null ? '—' : fmt.pct(r.periodReturn))}</strong></div>
     </div>`;
-  }).join('') + `<div class="motor-total"><span>Resultado total dos motores</span><span class="${totalResult >= 0 ? 'value-positive' : 'value-negative'}">${fmt.brl(totalResult)}</span></div>`;
+  }).join('') + `<div class="motor-total"><span>Resultado total dos motores</span><span class="${availableResults.length ? (totalResult >= 0 ? 'value-positive' : 'value-negative') : 'muted'}">${availableResults.length ? fmt.brl(totalResult) : 'Não disponível na fonte'}</span></div>`;
 }
 
 function renderMotorDefinitions(rows) {
   const ordered = [...(rows || [])].sort((a,b) => motorOrderKey(a) - motorOrderKey(b));
   return ordered.map(r => {
-    const accumulated = Number(r.accumulatedResult) || 0;
-    const cls = accumulated >= 0 ? 'positive' : 'negative';
+    const available = r.accumulatedResultAvailable && finiteNumber(r.accumulatedResult) !== null;
+    const accumulated = available ? Number(r.accumulatedResult) : null;
+    const cls = available ? (accumulated >= 0 ? 'positive' : 'negative') : '';
     return `<div class="definition-item">
       <strong>${escapeHtml(motorShortLabel(r.strategicFunction))}</strong>
-      <div class="definition-accumulated"><span>Ganho acumulado</span><span class="value-${cls}">${fmt.brl(accumulated)}</span></div>
+      <div class="definition-accumulated"><span>Ganho acumulado</span><span class="${available ? `value-${cls}` : 'muted'}">${available ? fmt.brl(accumulated) : 'Não disponível na fonte'}</span></div>
       <p>${escapeHtml(motorDefinition(r.strategicFunction))}</p>
     </div>`;
   }).join('');
@@ -3359,16 +3420,18 @@ function renderMotorDefinitions(rows) {
 function renderCompactMotorCards(rows) {
   const ordered = [...(rows || [])].sort((a,b) => motorOrderKey(a) - motorOrderKey(b));
   return `<div class="compact-motor-grid">${ordered.map(r => {
-    const periodResult = Number(r.periodResult) || 0;
-    const accumulated = Number(r.accumulatedResult) || 0;
-    const periodCls = periodResult >= 0 ? 'positive' : 'negative';
-    const accCls = accumulated >= 0 ? 'positive' : 'negative';
+    const periodAvailable = !resultUnavailable(r.periodResult, r.periodResultStatus);
+    const accumulatedAvailable = r.accumulatedResultAvailable && finiteNumber(r.accumulatedResult) !== null;
+    const periodResult = periodAvailable ? Number(r.periodResult) : null;
+    const accumulated = accumulatedAvailable ? Number(r.accumulatedResult) : null;
+    const periodCls = periodAvailable ? (periodResult >= 0 ? 'positive' : 'negative') : '';
+    const accCls = accumulatedAvailable ? (accumulated >= 0 ? 'positive' : 'negative') : '';
     return `<div class="compact-motor-card">
       <h3>${escapeHtml(motorShortLabel(r.strategicFunction))}</h3>
       <div class="compact-motor-meta"><span>${fmt.brl(r.currentValue || 0)}</span><strong>${fmt.pct(r.currentWeight || 0)}</strong></div>
       <div class="compact-motor-result">
-        <div><span>No mês</span><strong class="value-${periodCls}">${fmt.brl(periodResult)}</strong></div>
-        <div><span>Ganho acum.</span><strong class="value-${accCls}">${fmt.brl(accumulated)}</strong></div>
+        <div><span>No mês</span><strong class="${periodAvailable ? `value-${periodCls}` : 'muted'}">${periodAvailable ? fmt.brl(periodResult) : 'Não disponível na fonte'}</strong></div>
+        <div><span>Ganho acum.</span><strong class="${accumulatedAvailable ? `value-${accCls}` : 'muted'}">${accumulatedAvailable ? fmt.brl(accumulated) : 'Não disponível na fonte'}</strong></div>
       </div>
       <p>${escapeHtml(motorDefinition(r.strategicFunction))}</p>
     </div>`;
@@ -3392,14 +3455,28 @@ function renderAllocationRows(rows) {
 }
 
 function renderResultRows(rows) {
-  const total = rows.reduce((sum, r) => sum + (Number(r.periodResult) || 0), 0);
+  const availableRows = rows.filter(r => !resultUnavailable(r.periodResult, r.periodResultStatus));
+  const total = availableRows.reduce((sum, r) => sum + Number(r.periodResult), 0);
   return rows.map(r => {
-    const cls = r.periodResult >= 0 ? 'positive' : 'negative';
+    const unavailable = resultUnavailable(r.periodResult, r.periodResultStatus);
+    const cls = unavailable ? '' : (Number(r.periodResult) >= 0 ? 'positive' : 'negative');
     return `<div class="result-row ${cls}">
-      <div class="result-top"><span>${escapeHtml(CLASS_LABELS[r.classLGV] || r.classLGV)}</span><span class="value-${cls}">${fmt.brl(r.periodResult)}</span></div>
-      <div class="row-sub">Resultado financeiro aproximado no período</div>
+      <div class="result-top"><span>${escapeHtml(CLASS_LABELS[r.classLGV] || r.classLGV)}</span><span class="${unavailable ? 'muted' : `value-${cls}`}">${unavailable ? unavailableLabel(r.periodResultDisplay) : fmt.brl(r.periodResult)}</span></div>
+      <div class="row-sub">${unavailable ? 'A fonte não fornece resultado mensal desta classe.' : 'Resultado financeiro aproximado no período'}</div>
     </div>`;
-  }).join('') + `<div class="result-total"><span>Resultado total por classe</span><span class="${total >= 0 ? 'value-positive' : 'value-negative'}">${fmt.brl(total)}</span></div>`;
+  }).join('') + `<div class="result-total"><span>Resultado total por classe</span><span class="${availableRows.length ? (total >= 0 ? 'value-positive' : 'value-negative') : 'muted'}">${availableRows.length ? fmt.brl(total) : 'Não disponível na fonte'}</span></div>`;
+}
+
+function renderSourceGroupPerformanceRows(rows) {
+  if (!Array.isArray(rows) || !rows.length) return '';
+  return rows.map(r => {
+    const value = finiteNumber(r.snapshotReturn ?? r.return);
+    const cls = value === null ? '' : (value >= 0 ? 'positive' : 'negative');
+    return `<div class="result-row ${cls}">
+      <div class="result-top"><span>${escapeHtml(r.label || 'Grupo')}</span><span class="${value === null ? 'muted' : `value-${cls}`}">${value === null ? '—' : fmt.pct(value)}</span></div>
+      <div class="row-sub">Rentabilidade exibida pelo consolidador no snapshot; não interpretada como retorno do mês.</div>
+    </div>`;
+  }).join('');
 }
 
 function renderAssetRows(rows, type) {
@@ -3505,15 +3582,15 @@ function renderPage1(data, report, goal) {
   const ipcaFromStart = benchmark.ipcaAccumulated ?? ipcaFromStartState.value;
   const ipcaPeriodEstimated = !!ipcaPeriodState.estimated;
   const ipcaFromStartEstimated = !!(benchmark.ipcaAccumulatedEstimated || ipcaFromStartState.estimated);
-  const positionResult = s.financialResultPositionAdjusted ?? s.financialResultDailyPerformance ?? 0;
-  const positionReturn = s.initialWealthPositionDetail ? positionResult / s.initialWealthPositionDetail : 0;
+  const positionResult = finiteNumber(s.financialResultPositionAdjusted, s.financialResultDailyPerformance);
+  const positionReturn = s.initialWealthPositionDetail && positionResult !== null ? positionResult / s.initialWealthPositionDetail : null;
   const shareMonthly = getOfficialMonthlyReturn(data, report);
   const shareAccumulated = getOfficialAccumulatedReturn(data, report) ?? benchmark.portfolioAccumulated;
   const returnClass = (shareMonthly ?? 0) >= 0 ? 'positive' : 'negative';
-  const resultClass = positionResult >= 0 ? 'positive' : 'negative';
+  const resultClass = positionResult === null ? '' : (positionResult >= 0 ? 'positive' : 'negative');
   const accumulatedResult = getAccumulatedPositionGain(data, report);
   const accumulatedReturn = getAccumulatedPositionReturn(data, report);
-  const accumulatedResultClass = accumulatedResult >= 0 ? 'positive' : 'negative';
+  const accumulatedResultClass = accumulatedResult === null ? '' : (accumulatedResult >= 0 ? 'positive' : 'negative');
   const accumulatedReturnClass = (shareAccumulated ?? 0) >= 0 ? 'positive' : 'negative';
   const incomeModelLabel = goal.incomeModel === 'consumption' ? 'Consumindo patrimônio' : 'Preservando patrimônio';
   const objectiveTitle = goal.objective === 'wealth' ? 'Meta patrimonial' : 'Meta de renda';
@@ -3557,10 +3634,10 @@ function renderPage1(data, report, goal) {
 
       ${isBlockEnabled('summaryCards') ? `
       <div class="kpi-grid">
-        <div class="metric-card"><div class="metric-label">Aportes no mês</div><div class="metric-value">${fmt.brl(s.contributions)}</div><div class="metric-hint">Entradas externas</div></div>
-        <div class="metric-card"><div class="metric-label">Resgates no mês</div><div class="metric-value">${fmt.brl(s.withdrawals)}</div><div class="metric-hint">Saídas externas</div></div>
-        <div class="metric-card"><div class="metric-label">Ganho do mês (R$)</div><div class="metric-value ${resultClass}">${fmt.brl(positionResult)}</div><div class="metric-hint">Posição detalhada</div></div>
-        <div class="metric-card"><div class="metric-label">Ganho acumulado da posição</div><div class="metric-value ${accumulatedResultClass}">${fmt.brl(accumulatedResult)}</div><div class="metric-hint">Resultado atual dos ativos</div></div>
+        <div class="metric-card"><div class="metric-label">Aportes no mês</div><div class="metric-value">${moneyOrUnavailable(s.contributions, s.contributionsStatus)}</div><div class="metric-hint">${resultUnavailable(s.contributions, s.contributionsStatus) ? 'Não informado pela fonte' : 'Entradas externas'}</div></div>
+        <div class="metric-card"><div class="metric-label">Resgates no mês</div><div class="metric-value">${moneyOrUnavailable(s.withdrawals, s.withdrawalsStatus)}</div><div class="metric-hint">${resultUnavailable(s.withdrawals, s.withdrawalsStatus) ? 'Não informado pela fonte' : 'Saídas externas'}</div></div>
+        <div class="metric-card"><div class="metric-label">Ganho do mês (R$)</div><div class="metric-value ${resultClass}">${positionResult === null ? '<span class="muted">Não disponível na fonte</span>' : fmt.brl(positionResult)}</div><div class="metric-hint">${positionResult === null ? 'A rentabilidade percentual mensal permanece disponível' : 'Posição detalhada'}</div></div>
+        <div class="metric-card"><div class="metric-label">Ganho acumulado da posição</div><div class="metric-value ${accumulatedResultClass}">${accumulatedResult === null ? '<span class="muted">Não disponível na fonte</span>' : fmt.brl(accumulatedResult)}</div><div class="metric-hint">${accumulatedResult === null ? 'Custo/ganho individual incompleto na fonte' : 'Resultado atual dos ativos'}</div></div>
         <div class="metric-card"><div class="metric-label">Rentabilidade no mês</div><div class="metric-value ${returnClass}">${shareMonthly === null ? '—' : fmt.pct(shareMonthly)}</div><div class="metric-hint">${benchmark.source === 'monthly' ? 'Consolidação mensal' : 'Metodologia de cotas'}</div></div>
         <div class="metric-card"><div class="metric-label">Rentabilidade acumulada</div><div class="metric-value ${accumulatedReturnClass}">${shareAccumulated === null ? '—' : fmt.pct(shareAccumulated)}</div><div class="metric-hint">Desde o início da consultoria</div></div>
       </div>` : ''}
@@ -4089,32 +4166,49 @@ function renderPage2Allocation(data, report) {
 }
 
 function renderPage2Results(data, report) {
-  const classRows = [...(report.classResults || [])].sort((a,b) => b.periodResult - a.periodResult);
+  const classRows = [...(report.classResults || [])].sort((a,b) => {
+    const av = finiteNumber(a.periodResult);
+    const bv = finiteNumber(b.periodResult);
+    if (av === null && bv === null) return 0;
+    if (av === null) return 1;
+    if (bv === null) return -1;
+    return bv - av;
+  });
   const assetRows = report.assetResults || [];
-  const positives = [...assetRows].filter(a => a.periodResult > 0).sort((a,b)=>b.periodResult-a.periodResult).slice(0,3);
-  const negative = [...assetRows].filter(a => a.periodResult < 0).sort((a,b)=>a.periodResult-b.periodResult).slice(0,3);
+  const positives = [...assetRows].filter(a => finiteNumber(a.periodResult) !== null && a.periodResult > 0).sort((a,b)=>b.periodResult-a.periodResult).slice(0,3);
+  const negative = [...assetRows].filter(a => finiteNumber(a.periodResult) !== null && a.periodResult < 0).sort((a,b)=>a.periodResult-b.periodResult).slice(0,3);
+  const sourceGroupRows = report.sourceGroupPerformance || [];
+  const classMonthlyUnavailable = classRows.length > 0 && classRows.every(r => resultUnavailable(r.periodResult, r.periodResultStatus));
   return `
   <section class="report-page" id="pageResults">
-    ${renderHead('Resultado e destaques', data, report)}
+    ${renderHead('Resultado e dados da fonte', data, report)}
     <div class="report-body page-results-body">
       ${isBlockEnabled('classResults') ? `
       <div class="section-title" style="margin-top:0;">Resultado por classe no mês</div>
       <div class="chart-card result-card-page">
-        <div class="chart-title">Contribuição financeira aproximada</div>
-        <div class="chart-subtitle">Calculada por comparação entre posições, ajustada por compras/vendas internas.</div>
-        <div class="compact-list">${renderResultRows(classRows)}</div>
+        <div class="chart-title">${classMonthlyUnavailable ? 'Disponibilidade do resultado mensal' : 'Contribuição financeira aproximada'}</div>
+        <div class="chart-subtitle">${classMonthlyUnavailable ? 'O consolidador não fornece o resultado mensal por classe LGV. A alocação atual e os alvos permanecem disponíveis normalmente.' : 'Calculada por comparação entre posições, ajustada por compras/vendas internas.'}</div>
+        <div class="compact-list">${classRows.length ? renderResultRows(classRows) : '<div class="muted">Não disponível na fonte.</div>'}</div>
       </div>` : ''}
 
-      ${isBlockEnabled('highlights') ? `
+      ${sourceGroupRows.length ? `
+      <div class="section-title">Rentabilidade exibida no snapshot da fonte</div>
+      <div class="chart-card result-card-page">
+        <div class="chart-title">Grupos do consolidador</div>
+        <div class="chart-subtitle">Informação preservada exatamente como snapshot da fonte. Estes percentuais não são tratados como resultado de ${fmt.month(state.selectedPeriod)}.</div>
+        <div class="compact-list">${renderSourceGroupPerformanceRows(sourceGroupRows)}</div>
+      </div>` : ''}
+
+      ${isBlockEnabled('highlights') && (positives.length || negative.length) ? `
       <div class="section-title">Destaques do mês</div>
       <div class="grid two">
         <div class="metric-card">
           <div class="chart-title">Destaques positivos no mês</div>
-          <div class="compact-list">${renderAssetRows(positives, 'positive')}</div>
+          <div class="compact-list">${positives.length ? renderAssetRows(positives, 'positive') : '<span class="muted">Não disponível na fonte.</span>'}</div>
         </div>
         <div class="metric-card">
           <div class="chart-title">Ativos em janela de preço no mês</div>
-          <div class="compact-list">${renderAssetRows(negative, 'negative')}</div>
+          <div class="compact-list">${negative.length ? renderAssetRows(negative, 'negative') : '<span class="muted">Não disponível na fonte.</span>'}</div>
         </div>
       </div>` : ''}
     </div>
@@ -4240,6 +4334,8 @@ function friendlyReconciliationStatus(status) {
     position_and_monthly_close_reconciled_with_prior_source_restatement: 'Conciliado com ressalva',
     monthly_primary_position_restatement_reconciled: 'Conciliado com ressalva',
     monthly_primary_position_restatement_reconciled_with_prior_source_restatement: 'Conciliado com ressalva',
+    acceptable_source_snapshot: 'Snapshot conciliado',
+    source_snapshot_with_reservation: 'Snapshot conciliado com ressalva',
     attention: 'Atenção',
     review: 'Revisar'
   };
@@ -4263,8 +4359,8 @@ function renderPage4(data, report, goal) {
   const ipcaMonth = ipcaPeriodState.value;
   const ipcaAccum = benchmark.ipcaAccumulated ?? ipcaAccumState.value;
   const ipcaEstimated = !!(ipcaPeriodState.estimated || benchmark.ipcaAccumulatedEstimated || ipcaAccumState.estimated);
-  const positionResult = s.financialResultPositionAdjusted ?? s.financialResultDailyPerformance ?? 0;
-  const positionReturn = s.initialWealthPositionDetail ? positionResult / s.initialWealthPositionDetail : 0;
+  const positionResult = finiteNumber(s.financialResultPositionAdjusted, s.financialResultDailyPerformance);
+  const positionReturn = s.initialWealthPositionDetail && positionResult !== null ? positionResult / s.initialWealthPositionDetail : null;
   const accumulatedGain = getAccumulatedPositionGain(data, report);
   const accumulatedGainPct = getAccumulatedPositionReturn(data, report);
   const reconcile = report.reconciliation || {};
@@ -4298,7 +4394,7 @@ function renderPage4(data, report, goal) {
           <h3>Fontes principais</h3>
           <div class="assumption-list">
             ${renderAssumptionItem('Patrimônio, alocação e ganhos', 'Posição detalhada')}
-            ${renderAssumptionItem('Rentabilidade da carteira', benchmark.source === 'monthly' ? 'Consolidação mensal do MyProfit' : 'Cota diária')}
+            ${renderAssumptionItem('Rentabilidade da carteira', benchmark.source === 'monthly' ? `Consolidação mensal · ${escapeHtml(report.source?.provider || data.source?.provider || data.dataSources?.consolidator || 'fonte consolidada')}` : 'Cota diária')}
             ${renderAssumptionItem('CDI', 'BCB · SGS 12')}
             ${renderAssumptionItem('IPCA', `BCB · SGS 433${ipcaSuffix}`)}
             ${normalizeIncomeData(data, report) ? renderAssumptionItem('Proventos recebidos', 'Relatório de proventos') : ''}
@@ -4341,12 +4437,12 @@ function renderPage4(data, report, goal) {
           <h3>Números de controle</h3>
           <div class="assumption-list">
             ${renderAssumptionItem('Patrimônio consolidado', fmt.brl(s.currentWealthPositionDetail))}
-            ${renderAssumptionItem('Aportes no mês', fmt.brl(s.contributions || 0))}
-            ${renderAssumptionItem('Resgates no mês', fmt.brl(s.withdrawals || 0))}
-            ${renderAssumptionItem('Ganho do mês', fmt.brl(positionResult))}
+            ${renderAssumptionItem('Aportes no mês', resultUnavailable(s.contributions, s.contributionsStatus) ? 'Não disponível na fonte' : fmt.brl(s.contributions))}
+            ${renderAssumptionItem('Resgates no mês', resultUnavailable(s.withdrawals, s.withdrawalsStatus) ? 'Não disponível na fonte' : fmt.brl(s.withdrawals))}
+            ${renderAssumptionItem('Ganho do mês', positionResult === null ? 'Não disponível na fonte' : fmt.brl(positionResult))}
             ${renderAssumptionItem('Rentabilidade oficial do mês', getOfficialMonthlyReturn(data, report) === null ? '—' : fmt.pct(getOfficialMonthlyReturn(data, report)))}
-            ${renderAssumptionItem('Ganho acumulado da posição', fmt.brl(accumulatedGain))}
-            ${renderAssumptionItem('Ganho sobre capital investido', accumulatedGainPct === null ? '—' : fmt.pct(accumulatedGainPct))}
+            ${renderAssumptionItem('Ganho acumulado da posição', accumulatedGain === null ? 'Não disponível na fonte' : fmt.brl(accumulatedGain))}
+            ${renderAssumptionItem('Ganho sobre capital investido', accumulatedGainPct === null ? 'Não disponível na fonte' : fmt.pct(accumulatedGainPct))}
           </div>
         </div>
 
@@ -4368,7 +4464,7 @@ function renderPage4(data, report, goal) {
             ${renderAssumptionItem('Patrimônio pela posição', fmt.brl(reconcile.positionDetailWealth ?? s.currentWealthPositionDetail))}
             ${renderAssumptionItem('Patrimônio mensal consolidado', fmt.brl(reconcile.monthlyPerformanceWealth ?? s.currentWealthMonthlyPerformance ?? s.currentWealthPositionDetail))}
             ${renderAssumptionItem('Diferença principal', fmt.brl(reconcileDifference))}
-            ${renderAssumptionItem('Série diária', ['not_reconciled','unavailable_for_2026-08_not_used','unavailable_for_august_close','unavailable','legacy_not_used'].includes(reconcile.dailySeriesStatus) ? 'Indisponível · não utilizada' : 'Conciliada')}
+            ${renderAssumptionItem('Série diária', ['not_reconciled','unavailable_for_2026-08_not_used','unavailable_for_august_close','unavailable','legacy_not_used'].includes(String(reconcile.dailySeriesStatus || report.performanceAudit?.dailySeriesStatus || data.dataQuality?.dailyPerformance?.status || '').toLowerCase()) ? 'Indisponível · não utilizada' : 'Conciliada')}
             ${reconcile.dailyPerformanceWealth != null ? renderAssumptionItem('Patrimônio na série diária', fmt.brl(reconcile.dailyPerformanceWealth)) : ''}
             ${reconcile.dailyDifferenceValue != null ? renderAssumptionItem('Diferença da série diária', fmt.brl(reconcile.dailyDifferenceValue)) : ''}
           </div>
@@ -4376,7 +4472,7 @@ function renderPage4(data, report, goal) {
       </div>
 
       <div class="calculation-note">
-        ${benchmark.source === 'monthly' ? 'A rentabilidade da carteira foi obtida da consolidação mensal do MyProfit, porque a série diária não passou na conciliação deste período.' : 'A rentabilidade da carteira é calculada por cotas e considera o tempo de exposição de cada aporte.'} Já o ganho da posição mostra o resultado financeiro aproximado pela variação patrimonial ajustada pelos aportes e resgates. Por isso, os dois números podem ser diferentes.
+        ${benchmark.source === 'monthly' ? `A rentabilidade da carteira foi obtida da consolidação mensal de ${escapeHtml(report.source?.provider || data.source?.provider || data.dataSources?.consolidator || 'origem')}.` : 'A rentabilidade da carteira é calculada por cotas e considera o tempo de exposição de cada aporte.'} ${positionResult === null ? 'A fonte não disponibiliza dados suficientes para calcular com segurança o ganho financeiro do mês; por isso esse campo é apresentado como indisponível, sem conversão para zero.' : 'Já o ganho da posição mostra o resultado financeiro aproximado pela variação patrimonial ajustada pelos aportes e resgates. Por isso, os dois números podem ser diferentes.'}
       </div>
       ${renderDisclaimer()}
     </div>
@@ -4621,7 +4717,14 @@ function drawAllocationChart(rows) {
 }
 
 function drawClassResultsChart(rows) {
-  const data = rows.map(r => ({ label: CLASS_LABELS[r.classLGV] || r.classLGV, value: r.periodResult, kind: r.periodResult >= 0 ? 'good' : 'bad' }));
+  const data = rows
+    .filter(r => !resultUnavailable(r.periodResult, r.periodResultStatus))
+    .map(r => ({ label: CLASS_LABELS[r.classLGV] || r.classLGV, value: Number(r.periodResult), kind: Number(r.periodResult) >= 0 ? 'good' : 'bad' }));
+  if (!data.length) {
+    const el = document.getElementById('classResultChart');
+    if (el) el.innerHTML = `<text x="10" y="30" fill="#777">Não disponível na fonte</text>`;
+    return;
+  }
   drawHorizontalBars('classResultChart', data, { money: true, signed: true });
 }
 
