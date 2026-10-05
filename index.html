@@ -5907,6 +5907,7 @@ window.lgvReportSetStatus = setStatus;
   let appPage = 'dashboard';
   let activeProfileTab = 'overview';
   let activeClientObservations = [];
+  let observationsAccessError = '';
   let editingObservationId = '';
   let activeClientDoc = null;
   let activeClientData = null;
@@ -6460,8 +6461,19 @@ window.lgvReportSetStatus = setStatus;
 
   async function getClientObservations(clientId) {
     if (!clientId) return [];
-    const snapshot = await getDocs(collection(db, CLIENTS_COLLECTION, clientId, 'observations'));
-    return snapshot.docs.map(item => ({id:item.id,...item.data()})).sort((a,b)=>String(b.updatedAtIso||b.createdAtIso||'').localeCompare(String(a.updatedAtIso||a.createdAtIso||'')));
+    try {
+      const snapshot = await getDocs(collection(db, CLIENTS_COLLECTION, clientId, 'observations'));
+      observationsAccessError = '';
+      return snapshot.docs.map(item => ({id:item.id,...item.data()})).sort((a,b)=>String(b.updatedAtIso||b.createdAtIso||'').localeCompare(String(a.updatedAtIso||a.createdAtIso||'')));
+    } catch (error) {
+      const permissionDenied = error?.code === 'permission-denied' || /missing or insufficient permissions/i.test(String(error?.message || ''));
+      if (permissionDenied) {
+        observationsAccessError = 'A permissão da subcoleção de observações ainda não foi publicada no Firestore.';
+        console.warn('Observações indisponíveis por regra do Firestore. O restante do perfil continuará carregando.', error);
+        return [];
+      }
+      throw error;
+    }
   }
 
   async function reloadClientObservations() {
@@ -6471,6 +6483,7 @@ window.lgvReportSetStatus = setStatus;
 
   function renderObservationsTab() {
     if (creatingClient || !selectedClientId) return `<div class="native-note">Salve o cadastro do cliente primeiro. Depois você poderá adicionar quantas observações quiser, cada uma com título e informação.</div>`;
+    if (observationsAccessError) return `<section class="profile-panel"><div class="profile-panel-head"><div><h3>Observações</h3><p>O perfil e o histórico do cliente continuam disponíveis normalmente.</p></div></div><div class="native-note"><strong>Observações temporariamente indisponíveis.</strong><br>${escapeHtml(observationsAccessError)}<br><br>Publique a regra para <code>clients/{clientId}/observations/{observationId}</code> no Firebase para liberar esta aba.</div></section>`;
     const editing = activeClientObservations.find(item=>item.id===editingObservationId)||null;
     const cards = activeClientObservations.length ? activeClientObservations.map(item => {
       const created=item.createdAtIso?new Date(item.createdAtIso).toLocaleString('pt-BR'):'—';
@@ -6557,6 +6570,7 @@ window.lgvReportSetStatus = setStatus;
     };
     activeClientData = null;
     activeClientObservations = [];
+    observationsAccessError = '';
     editingObservationId = '';
     showPage('profile');
     updateProfileHeader();
