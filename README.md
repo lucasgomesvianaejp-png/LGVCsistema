@@ -55,3 +55,19 @@ Se as regras atuais do Firestore não permitirem subcoleções de `clients`, mes
 `firebase/firestore-client-observations.rules.snippet`
 
 Não substitua as regras atuais inteiras apenas por esse trecho.
+
+## Atualização v4.2 — Importação JSON por substituição de período
+
+A importação mensal agora segue a regra:
+
+- mesmo `clientId` + mesmo `period` = substituição integral dos dados daquele período;
+- mesmo `clientId` + período novo = inclusão de novo período.
+
+Na substituição de um período, o sistema preserva cadastro, observações manuais e demais meses, mas troca de forma autoritativa os blocos do mês importado, incluindo `reportSnapshots[period]`, desempenho mensal/diário do período, posições do fechamento, caixa/proventos vinculados ao ciclo, planos/status indexados pelo período e outros arrays/mapas com marca temporal explícita.
+
+Após a gravação, o workspace continua usando a versão recém-importada em memória — não refaz merge com dados antigos — e seleciona imediatamente o período importado para relatório/PDF.
+
+Mensagem visual:
+
+- `Período AAAA-MM atualizado com sucesso.` quando o mês já existia;
+- `Período AAAA-MM adicionado com sucesso.` quando é um mês novo.

@@ -5912,6 +5912,7 @@ window.lgvReportSetStatus = setStatus;
   let activeClientDoc = null;
   let activeClientData = null;
   let creatingClient = false;
+  let pendingReportImport = null;
   const stocksModule = createStocksModule(document.getElementById('stocksModule'), {
     dataProvider: async () => fetchStocksDashboard(db, currentUser),
     onStatus: (message, kind) => {
@@ -6029,7 +6030,182 @@ window.lgvReportSetStatus = setStatus;
     return [...map.values()].sort((x, y) => String(y.period).localeCompare(String(x.period)));
   }
 
-  function mergeReportData(cloudData, localData) {
+  function normalizePeriodToken(value) {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})/);
+    if (!match) return '';
+    const month = Number(match[2]);
+    return month >= 1 && month <= 12 ? `${match[1]}-${match[2]}` : '';
+  }
+
+  function getRowPeriod(row) {
+    if (!row || typeof row !== 'object') return '';
+    const directFields = [
+      'period', 'referencePeriod', 'reportPeriod', 'referenceMonth', 'month',
+      'linkedReportPeriod', 'competence', 'competencia'
+    ];
+    for (const key of directFields) {
+      const period = normalizePeriodToken(row[key]);
+      if (period) return period;
+    }
+    const dateFields = [
+      'date', 'data', 'positionDate', 'baseDate', 'periodEnd', 'paymentDate',
+      'receivedDate', 'cutoffDate', 'asOf', 'endInclusive'
+    ];
+    for (const key of dateFields) {
+      const period = normalizePeriodToken(row[key]);
+      if (period) return period;
+    }
+    return '';
+  }
+
+  function getImportPeriod(data = {}) {
+    const explicit = [
+      data.period, data.reportPeriod, data.referencePeriod, data.referenceMonth, data.month,
+      data.currentPeriod, data.selectedPeriod, data.report?.period, data.report?.referencePeriod
+    ].map(normalizePeriodToken).find(Boolean);
+    if (explicit) return explicit;
+
+    const snapshotPeriods = Object.keys(data.reportSnapshots || {}).map(normalizePeriodToken).filter(Boolean).sort();
+    if (snapshotPeriods.length) return snapshotPeriods.at(-1);
+
+    const availablePeriods = (data.availableReports || [])
+      .map(item => normalizePeriodToken(typeof item === 'string' ? item : item?.period))
+      .filter(Boolean).sort();
+    if (availablePeriods.length) return availablePeriods.at(-1);
+
+    const monthlyPeriods = (data.monthlyPerformance || []).map(getRowPeriod).filter(Boolean).sort();
+    if (monthlyPeriods.length) return monthlyPeriods.at(-1);
+
+    const positionPeriods = (data.positions || []).map(getRowPeriod).filter(Boolean).sort();
+    return positionPeriods.at(-1) || '';
+  }
+
+  function replacePeriodRows(existingRows = [], incomingRows = [], period, force = false) {
+    const existing = Array.isArray(existingRows) ? existingRows : [];
+    const incoming = Array.isArray(incomingRows) ? incomingRows : [];
+    const incomingForPeriod = incoming.filter(row => getRowPeriod(row) === period);
+    const hasTemporalRows = incoming.some(row => Boolean(getRowPeriod(row)));
+    if (!force && !incomingForPeriod.length && !hasTemporalRows) return clone(incoming, []) || [];
+    return [
+      ...existing.filter(row => getRowPeriod(row) !== period),
+      ...incomingForPeriod.map(row => clone(row, row))
+    ];
+  }
+
+  function replaceAvailableReport(existingRows = [], incomingRows = [], period) {
+    const existing = Array.isArray(existingRows) ? existingRows : [];
+    const incoming = Array.isArray(incomingRows) ? incomingRows : [];
+    const target = incoming.filter(item => normalizePeriodToken(typeof item === 'string' ? item : item?.period) === period);
+    const preserved = existing.filter(item => normalizePeriodToken(typeof item === 'string' ? item : item?.period) !== period);
+    const exact = target.length ? target.map(item => clone(item, item)) : [{ period }];
+    return [...preserved, ...exact].sort((a, b) => {
+      const pa = normalizePeriodToken(typeof a === 'string' ? a : a?.period);
+      const pb = normalizePeriodToken(typeof b === 'string' ? b : b?.period);
+      return pb.localeCompare(pa);
+    });
+  }
+
+  function replacePeriodMap(existingMap, incomingMap, period, clearWhenContainerPresent = true) {
+    const existing = existingMap && typeof existingMap === 'object' && !Array.isArray(existingMap) ? existingMap : {};
+    const incoming = incomingMap && typeof incomingMap === 'object' && !Array.isArray(incomingMap) ? incomingMap : {};
+    const result = clone(existing, {}) || {};
+    if (clearWhenContainerPresent) delete result[period];
+    if (Object.prototype.hasOwnProperty.call(incoming, period)) result[period] = clone(incoming[period], incoming[period]);
+    return result;
+  }
+
+  function looksLikePeriodMap(value) {
+    return Boolean(value && typeof value === 'object' && !Array.isArray(value)
+      && Object.keys(value).some(key => Boolean(normalizePeriodToken(key))));
+  }
+
+  function mergePeriodAwareObject(existingValue, incomingValue, period) {
+    if (!incomingValue || typeof incomingValue !== 'object' || Array.isArray(incomingValue)) return clone(incomingValue, incomingValue);
+    if (getRowPeriod(incomingValue) === period) return clone(incomingValue, {}) || {};
+    if (looksLikePeriodMap(existingValue) || looksLikePeriodMap(incomingValue)) {
+      return replacePeriodMap(existingValue, incomingValue, period, true);
+    }
+    const existing = existingValue && typeof existingValue === 'object' && !Array.isArray(existingValue) ? existingValue : {};
+    const result = { ...clone(existing, {}), ...clone(incomingValue, {}) };
+    ['entries', 'monthlyEvolution', 'evolution', 'monthly', 'byMonth', 'months'].forEach(key => {
+      if (!Object.prototype.hasOwnProperty.call(incomingValue, key) || !Array.isArray(incomingValue[key])) return;
+      result[key] = replacePeriodRows(existing[key], incomingValue[key], period, true);
+    });
+    return result;
+  }
+
+  function enforceExactPeriodReplacement(mergedData, cloudData, importedData, period) {
+    if (!period || !cloudData) return mergedData;
+    const result = clone(mergedData, {}) || {};
+    const cloud = cloudData || {};
+    const incoming = importedData || {};
+
+    // Maps indexados diretamente pelo período: a entrada daquele mês é substituída como um bloco.
+    const explicitPeriodMaps = ['reportSnapshots', 'actionPlans', 'incomeSnapshots', 'proventosSnapshots', 'statusSnapshots', 'planSnapshots'];
+    explicitPeriodMaps.forEach(key => {
+      if (!Object.prototype.hasOwnProperty.call(incoming, key)) return;
+      result[key] = replacePeriodMap(cloud[key], incoming[key], period, key !== 'reportSnapshots');
+      if (key === 'reportSnapshots' && Object.prototype.hasOwnProperty.call(incoming[key] || {}, period)) {
+        result[key][period] = clone(incoming[key][period], incoming[key][period]);
+      }
+    });
+
+    // Qualquer outro mapa top-level indexado por YYYY-MM recebe a mesma regra sem alterar outros meses.
+    Object.keys(incoming).forEach(key => {
+      if (explicitPeriodMaps.includes(key)) return;
+      if (!looksLikePeriodMap(incoming[key]) && !looksLikePeriodMap(cloud[key])) return;
+      result[key] = replacePeriodMap(cloud[key], incoming[key], period, true);
+    });
+
+    // Objetos isolados que declaram explicitamente o mesmo período são substituídos integralmente.
+    Object.keys(incoming).forEach(key => {
+      const value = incoming[key];
+      if (!value || typeof value !== 'object' || Array.isArray(value) || looksLikePeriodMap(value)) return;
+      if (getRowPeriod(value) === period) result[key] = clone(value, {}) || {};
+    });
+
+    if (Object.prototype.hasOwnProperty.call(incoming, 'availableReports')) {
+      result.availableReports = replaceAvailableReport(cloud.availableReports, incoming.availableReports, period);
+    } else if (result.reportSnapshots?.[period]) {
+      result.availableReports = replaceAvailableReport(cloud.availableReports, [{ period }], period);
+    }
+
+    // Séries em arrays: somente as linhas do período importado são trocadas; demais meses permanecem intactos.
+    const periodArrayKeys = ['monthlyPerformance', 'dailyPerformance', 'positions'];
+    periodArrayKeys.forEach(key => {
+      if (!Object.prototype.hasOwnProperty.call(incoming, key) || !Array.isArray(incoming[key])) return;
+      result[key] = replacePeriodRows(cloud[key], incoming[key], period, true);
+    });
+
+    // Caixa/proventos do ciclo: linkedReportPeriod prevalece; cutoff/payment date serve de fallback.
+    const cashKeys = ['reinvestmentCashWindows', 'cashWindows', 'proceedsCashWindows'];
+    const incomingCashKey = cashKeys.find(key => Object.prototype.hasOwnProperty.call(incoming, key) && Array.isArray(incoming[key]));
+    if (incomingCashKey) {
+      const existingCash = cashKeys.map(key => cloud[key]).find(Array.isArray) || [];
+      result.reinvestmentCashWindows = replacePeriodRows(existingCash, incoming[incomingCashKey], period, true);
+      if (incomingCashKey !== 'reinvestmentCashWindows') result[incomingCashKey] = clone(result.reinvestmentCashWindows, []);
+    }
+
+    // Estruturas de proventos podem vir como objeto cumulativo ou mapa por período.
+    ['income', 'proventos', 'dividends'].forEach(key => {
+      if (!Object.prototype.hasOwnProperty.call(incoming, key)) return;
+      if (Array.isArray(incoming[key])) result[key] = replacePeriodRows(cloud[key], incoming[key], period, true);
+      else result[key] = mergePeriodAwareObject(cloud[key], incoming[key], period);
+    });
+
+    // Arrays adicionais com marca temporal explícita seguem a mesma política automaticamente.
+    Object.keys(incoming).forEach(key => {
+      if (periodArrayKeys.includes(key) || cashKeys.includes(key) || ['income', 'proventos', 'dividends', 'availableReports'].includes(key)) return;
+      if (!Array.isArray(incoming[key])) return;
+      const incomingHasTemporalRows = incoming[key].some(row => Boolean(getRowPeriod(row)));
+      if (!incomingHasTemporalRows) return;
+      result[key] = replacePeriodRows(cloud[key], incoming[key], period, false);
+    });
+
+    return result;
+  }
+
+  function mergeReportData(cloudData, localData, options = {}) {
     if (!cloudData) return localData;
     if (!localData) return cloudData;
     const cloudLatest = getPeriods(cloudData)[0] || '';
@@ -6066,7 +6242,9 @@ window.lgvReportSetStatus = setStatus;
     if (Array.isArray(localData.positions) && Array.isArray(cloudData.positions)) {
       merged.positions = localData.positions.length >= cloudData.positions.length ? localData.positions : cloudData.positions;
     }
-    return merged;
+    return options.replacePeriod
+      ? enforceExactPeriodReplacement(merged, cloudData, localData, normalizePeriodToken(options.replacePeriod))
+      : merged;
   }
 
   function hasMeaningfulObject(value) {
@@ -6987,7 +7165,12 @@ window.lgvReportSetStatus = setStatus;
     }
     if (!silent) setSyncStatus('Salvando...', 'warn');
     const [existingData, existingDoc] = await Promise.all([getClientData(clientId), getClientRecord(clientId)]);
-    let mergedData = mergeReportData(existingData, localData);
+    const importContext = pendingReportImport && pendingReportImport.clientId === clientId
+      ? { ...pendingReportImport }
+      : null;
+    let mergedData = importContext?.period
+      ? mergeReportData(existingData, localData, { replacePeriod: importContext.period })
+      : mergeReportData(existingData, localData);
     const nativeDoc = existingDoc || activeClientDoc || {};
     const nativeProfile = nativeDoc.nativeConfigured ? nativeFromDoc(nativeDoc) : extractNativeProfile(mergedData);
     const nativeRecord = {
@@ -7025,8 +7208,9 @@ window.lgvReportSetStatus = setStatus;
     activeClientData = mergedData;
     activeClientDoc = { id:clientId, ...metadata, ...nativeProfile, nativeConfigured:true };
     await refreshClientList();
+    if (importContext) pendingReportImport = null;
     setSyncStatus(`Salvo às ${new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })}`, 'ok');
-    return true;
+    return { ok:true, importContext };
   }
 
   async function loadClient(clientId, period = '', showReports = true) {
@@ -7086,9 +7270,15 @@ window.lgvReportSetStatus = setStatus;
     if (importedId && importedId !== clientId) {
       throw new Error(`Importação bloqueada: o JSON é de ${importedName}, mas o cadastro aberto é de ${selectedName}.`);
     }
+    const importPeriod = getImportPeriod(imported);
+    if (!importPeriod) {
+      throw new Error('Não foi possível identificar o período (AAAA-MM) deste JSON.');
+    }
+    const periodAlreadyExists = getPeriods(existingData || {}).includes(importPeriod);
     selectedClientId = clientId;
     activeClientDoc = clientDoc;
-    let prepared = mergeReportData(existingData, imported);
+    pendingReportImport = { clientId, period: importPeriod, existed: periodAlreadyExists };
+    let prepared = mergeReportData(existingData, imported, { replacePeriod: importPeriod });
     prepared.clientId = clientId;
     prepared = applyNativeProfile(prepared, clientDoc);
     return prepared;
@@ -7250,9 +7440,27 @@ window.lgvReportSetStatus = setStatus;
       const ok = await window.lgvReadReportFile?.(file);
       if (ok !== false) {
         clearTimeout(saveTimer);
-        await saveCurrent('atualização JSON importada', false);
-        await loadClient(selectedClientId, '', true);
-        setSyncStatus('Atualização salva no cliente', 'ok');
+        const saveResult = await saveCurrent('atualização JSON importada', false);
+        const importContext = saveResult?.importContext || null;
+        const importedPeriod = importContext?.period || getImportPeriod(window.lgvGetCurrentReportData?.() || {});
+
+        // A memória recém-importada já é a versão oficialmente gravada; não recarregamos um merge/cache antigo.
+        updateReportContext(activeClientData);
+        showPage('reports');
+        routeTo('relatorios');
+        if (importedPeriod) {
+          const select = document.getElementById('periodSelect');
+          if (select && [...select.options].some(option => option.value === importedPeriod)) {
+            select.value = importedPeriod;
+            select.dispatchEvent(new Event('change'));
+          }
+        }
+
+        const successMessage = importedPeriod
+          ? `Período ${importedPeriod} ${importContext?.existed ? 'atualizado' : 'adicionado'} com sucesso.`
+          : 'Atualização salva no cliente.';
+        setSyncStatus(successMessage, 'ok');
+        window.lgvReportSetStatus?.(successMessage, 'ok');
       }
     } catch (error) { handleCloudError(error); }
     finally { event.target.value = ''; }
