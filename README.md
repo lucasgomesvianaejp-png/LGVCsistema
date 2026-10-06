@@ -76,3 +76,18 @@ Mensagem visual:
 ## v4.5 — relatório Investidor10 no formato cliente
 
 O relatório de fonte Investidor10 foi simplificado para o padrão de comunicação já utilizado com clientes: capa, comentário, resumo executivo, distribuição da carteira e performance dos ativos. O relatório MyProfit permanece preservado. Veja `FIX_INVESTIDOR10_CLIENT_REPORT_V4_5.md`.
+
+## v4.6 — mês fechado + posição atual no Investidor10
+
+Quando o JSON do Investidor10 é um snapshot parcial do mês corrente, o relatório passa a analisar automaticamente o último mês fechado. Exemplo: snapshot de 05/10/2026 gera relatório de setembro/2026, preservando 05/10/2026 apenas como data-base da posição atual.
+
+Principais ajustes:
+- capa, cabeçalhos e comentário vinculados ao último mês fechado;
+- rentabilidade mensal retirada de `monthlyPerformance`;
+- patrimônio, ganho acumulado e ganho de capital do mês retirados do histórico patrimonial do Investidor10;
+- alocação atual x meta usa a posição mais recente, com layout simplificado;
+- resumo consolidado mostra patrimônio de fechamento, ganho no mês e ganho total acumulado;
+- rentabilidades por ativo continuam identificadas como dados do snapshot atual;
+- CDI/IPCA, quando atualizados, usam o mês analisado e não o mês parcial do snapshot.
+
+Veja `FIX_INVESTIDOR10_MONTH_CLOSE_V4_6.md`.

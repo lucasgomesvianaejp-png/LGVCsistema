@@ -382,13 +382,14 @@
 
 
 
-    /* V4.5 — relatório Investidor10 simplificado, inspirado no modelo histórico enviado ao cliente */
+    /* V4.6 — relatório Investidor10: análise do último mês fechado + posição atual */
     .i10-cover-page { background: var(--black); color: white; border-top: 10px solid var(--gold); }
     .i10-cover-inner { min-height: 920px; padding: 92px 72px; display:flex; flex-direction:column; justify-content:center; }
     .i10-cover-kicker { color: var(--gold); font-weight: 900; letter-spacing: .12em; text-transform: uppercase; font-size: 14px; }
     .i10-cover-title { font-size: 48px; line-height: 1.02; letter-spacing: -.04em; margin: 18px 0 18px; max-width: 850px; }
     .i10-cover-client { font-size: 23px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; margin: 0 0 12px; }
     .i10-cover-period { color: #d8d8d8; font-size: 16px; }
+    .i10-cover-snapshot { color:#aeb4bb; font-size:13px; margin-top:8px; }
     .i10-cover-signature { margin-top: 80px; color: #bdbdbd; font-size: 13px; }
     .i10-summary-copy { margin-top: 18px; font-size: 14px; line-height: 1.65; color: #454545; }
     .i10-summary-copy p { margin: 0 0 12px; }
@@ -2029,7 +2030,7 @@
   </div>
 
 <script>
-// LGV Invest V4.5 — relatório Investidor10 no modelo cliente LGV + comentário
+// LGV Invest V4.6 — relatório Investidor10 por mês fechado + posição atual
 const REPORT_BLOCKS = [
   { key: 'wealth', label: 'Patrimônio consolidado' },
   { key: 'summaryCards', label: 'Cards de resumo' },
@@ -2845,9 +2846,11 @@ async function fetchBCBSeries(series, startIso, endIso) {
 async function refreshMarketRates() {
   if (!state.data || !state.selectedPeriod) return;
   const report = getReport();
-  const start = report.periodStart;
-  const end = report.periodEnd;
-  const consultingStart = state.data.client?.consultingStartDate || report.periodStart;
+  const i10Ctx = isInvestidor10Report(state.data, report) ? i10AnalysisContext(state.data, report) : null;
+  const start = i10Ctx?.periodStart || report.periodStart;
+  const end = i10Ctx?.periodEnd || report.periodEnd;
+  const marketPeriodKey = i10Ctx?.analysisPeriod || state.selectedPeriod;
+  const consultingStart = state.data.client?.consultingStartDate || start;
 
   const cdiPill = document.getElementById('cdiPill');
   const ipcaPill = document.getElementById('ipcaPill');
@@ -2862,14 +2865,16 @@ async function refreshMarketRates() {
     });
     const cdi = accumulateRates(cdiPeriod);
     const cdiStart = accumulateRates(cdiAll);
-    state.market.cdi[state.selectedPeriod] = { value: cdi, records: cdiPeriod.length };
+    state.market.cdi[marketPeriodKey] = { value: cdi, records: cdiPeriod.length };
     state.market.cdiSeries[state.selectedPeriod] = cdiAll;
-    state.market.cdiFromStart[state.selectedPeriod] = { value: cdiStart, records: cdiAll.length };
+    state.market.cdiSeries[marketPeriodKey] = cdiAll;
+    state.market.cdiFromStart[marketPeriodKey] = { value: cdiStart, records: cdiAll.length };
     report.summary.cdiReturn = cdi;
+    report.summary.cdiReferencePeriod = marketPeriodKey;
     const portfolioMonthReturn = getOfficialMonthlyReturn(state.data, report);
     report.summary.portfolioVsCDI = cdi && Number.isFinite(portfolioMonthReturn) ? portfolioMonthReturn / cdi : null;
     cdiPill.className = 'pill ok';
-    cdiPill.textContent = `CDI ${fmt.month(state.selectedPeriod)}: ${fmt.pct(cdi)}`;
+    cdiPill.textContent = `CDI ${fmt.month(marketPeriodKey)}: ${fmt.pct(cdi)}`;
   } catch (err) {
     cdiPill.className = 'pill bad';
     cdiPill.textContent = 'CDI: falha na API';
@@ -2890,7 +2895,7 @@ async function refreshMarketRates() {
     const ipcaAligned = accumulateMonthlyRatesAligned(ipcaItems, consultingStart, end);
     const ipcaPeriod = accumulateRates(ipcaPeriodItems);
     const periodEstimated = ipcaPeriodItems.some(item => item.estimated);
-    state.market.ipca[state.selectedPeriod] = {
+    state.market.ipca[marketPeriodKey] = {
       value: ipcaAligned.value,
       rawMonthlyAccumulated: ipca,
       records: ipcaItems.length,
@@ -2899,9 +2904,9 @@ async function refreshMarketRates() {
       alignedStart: consultingStart,
       alignedEnd: end
     };
-    state.market.ipcaSeries[state.selectedPeriod] = ipcaItems;
-    state.market.ipcaPeriod[state.selectedPeriod] = { value: ipcaPeriod, records: ipcaPeriodItems.length, estimated: periodEstimated };
-    state.market.ipcaEstimated[state.selectedPeriod] = { period: periodEstimated, accumulated: ipcaWithEstimate.estimated, estimate: ipcaWithEstimate.estimate };
+    state.market.ipcaSeries[marketPeriodKey] = ipcaItems;
+    state.market.ipcaPeriod[marketPeriodKey] = { value: ipcaPeriod, records: ipcaPeriodItems.length, estimated: periodEstimated };
+    state.market.ipcaEstimated[marketPeriodKey] = { period: periodEstimated, accumulated: ipcaWithEstimate.estimated, estimate: ipcaWithEstimate.estimate };
     ipcaPill.className = 'pill ok';
     ipcaPill.textContent = `IPCA acumulado: ${fmt.pct(ipca)}${ipcaWithEstimate.estimated ? ' estimado' : ''}`;
   } catch (err) {
@@ -3115,11 +3120,55 @@ function i10Pct(value, fallback='—') {
   return n === null ? fallback : fmt.pct(n);
 }
 
-function i10PeriodDescription(report) {
+function i10PreviousPeriod(period) {
+  const m = String(period || '').match(/^(\d{4})-(\d{2})$/);
+  if (!m) return period;
+  let y = Number(m[1]);
+  let mon = Number(m[2]) - 1;
+  if (mon <= 0) { mon = 12; y -= 1; }
+  return `${y}-${String(mon).padStart(2,'0')}`;
+}
+
+function i10AnalysisContext(data, report) {
   const partial = !!report?.isPartialSnapshot || !!report?.investidor10?.isPartialSnapshot;
-  if (partial) return `Snapshot analisado: ${fmt.date(report.positionFinalDate || report.periodEnd)}`;
-  if (report?.periodStart && report?.periodEnd) return `Período analisado: ${fmt.date(report.periodStart)} - ${fmt.date(report.periodEnd)}`;
-  return `Referência: ${fmt.month(state.selectedPeriod)}`;
+  const snapshotPeriod = String(report?.period || state.selectedPeriod || report?.positionFinalDate?.slice?.(0,7) || '');
+  const analysisPeriod = String(report?.analysisPeriod || (partial ? i10PreviousPeriod(snapshotPeriod) : snapshotPeriod));
+  const periodStart = analysisPeriod ? `${analysisPeriod}-01` : report?.periodStart;
+  const periodEnd = analysisPeriod ? monthEndIso(`${analysisPeriod}-01`) : report?.periodEnd;
+  const monthly = (data?.monthlyPerformance || []).find(r => String(r?.period || r?.month || '').slice(0,7) === analysisPeriod) || null;
+  const history = Array.isArray(report?.investidor10?.equityHistory) ? report.investidor10.equityHistory : [];
+  const close = history.find(r => String(r?.period || '').slice(0,7) === analysisPeriod) || null;
+  const previousPeriod = i10PreviousPeriod(analysisPeriod);
+  const previous = history.find(r => String(r?.period || '').slice(0,7) === previousPeriod) || null;
+  const summary = report?.summary || {};
+  const closingWealth = finiteNumber(close?.wealth ?? (partial ? null : summary.currentWealthPositionDetail));
+  const investedValue = finiteNumber(close?.investedValue ?? summary.investedValue);
+  const accumulatedGain = finiteNumber(close?.capitalGain ?? (partial ? null : summary.capitalGain));
+  const previousGain = finiteNumber(previous?.capitalGain);
+  const monthlyGain = accumulatedGain !== null && previousGain !== null ? accumulatedGain - previousGain : null;
+  const previousWealth = finiteNumber(previous?.wealth);
+  const wealthChange = closingWealth !== null && previousWealth !== null ? closingWealth - previousWealth : null;
+  const monthlyReturn = finiteNumber(monthly?.monthlyReturn ?? monthly?.periodReturn ?? (!partial ? summary.periodReturnOfficial : null));
+  return {
+    partial, snapshotPeriod, analysisPeriod, previousPeriod, periodStart, periodEnd, monthly, close, previous,
+    closingWealth, investedValue, accumulatedGain, monthlyGain, previousWealth, wealthChange, monthlyReturn
+  };
+}
+
+function i10CdiForAnalysisPeriod(data, report, ctx = i10AnalysisContext(data, report)) {
+  const direct = finiteNumber(state.market?.cdi?.[ctx.analysisPeriod]?.value);
+  if (direct !== null) return direct;
+  const stored = finiteNumber(report?.summary?.cdiReturn);
+  if (stored !== null && report?.summary?.cdiReferencePeriod === ctx.analysisPeriod) return stored;
+  const series = state.market?.cdiSeries?.[state.selectedPeriod] || state.market?.cdiSeries?.[ctx.analysisPeriod] || [];
+  const rows = series.filter(item => String(isoFromBRDate(item?.data || '')).slice(0,7) === ctx.analysisPeriod);
+  return rows.length ? accumulateRates(rows) : null;
+}
+
+function i10PeriodDescription(data, report) {
+  const ctx = i10AnalysisContext(data, report);
+  if (ctx.periodStart && ctx.periodEnd) return `Período analisado: ${fmt.date(ctx.periodStart)} - ${fmt.date(ctx.periodEnd)}`;
+  return `Referência: ${fmt.month(ctx.analysisPeriod || state.selectedPeriod)}`;
 }
 
 function i10ClientFeeAnnualPct(data) {
@@ -3134,72 +3183,58 @@ function i10ClassLabel(key) {
 
 function renderI10Cover(data, report) {
   const clientName = data?.client?.name || 'Cliente';
-  const partial = !!report?.isPartialSnapshot || !!report?.investidor10?.isPartialSnapshot;
+  const ctx = i10AnalysisContext(data, report);
   return `
   <section class="report-page i10-cover-page" id="i10Cover">
     <div class="i10-cover-inner">
       <div class="i10-cover-kicker">LGV Capital</div>
-      <h1 class="i10-cover-title">${partial ? 'Relatório de Investimentos' : 'Relatório Mensal de Investimentos'}</h1>
+      <h1 class="i10-cover-title">Relatório Mensal de Investimentos</h1>
       <div class="i10-cover-client">${escapeHtml(clientName)}</div>
-      <div class="i10-cover-period">${escapeHtml(i10PeriodDescription(report))}</div>
+      <div class="i10-cover-period">${escapeHtml(i10PeriodDescription(data, report))}</div>
+      ${ctx.partial ? `<div class="i10-cover-snapshot">Posição atual capturada em ${fmt.date(report.positionFinalDate || report.periodEnd)}</div>` : ''}
       <div class="i10-cover-signature">Consultoria e acompanhamento de investimentos · LGV Capital</div>
     </div>
   </section>`;
 }
 
 function i10ExecutiveNarrative(data, report) {
-  const s = report?.summary || {};
-  const partial = !!report?.isPartialSnapshot || !!report?.investidor10?.isPartialSnapshot;
-  const wealth = finiteNumber(s.currentWealthPositionDetail);
-  const invested = finiteNumber(s.investedValue);
-  const gain = finiteNumber(s.capitalGain);
-  const accumulated = finiteNumber(s.accumulatedReturnOfficial ?? s.totalReturnOfficial);
-  const periodReturn = finiteNumber(s.periodReturnOfficial);
-  const cdi = finiteNumber(state.market?.cdi?.[state.selectedPeriod]?.value ?? s.cdiReturn);
+  const ctx = i10AnalysisContext(data, report);
+  const cdi = i10CdiForAnalysisPeriod(data, report, ctx);
+  const vsCdi = ctx.monthlyReturn !== null && cdi !== null ? ctx.monthlyReturn - cdi : null;
   const feePct = i10ClientFeeAnnualPct(data);
-  const fee = wealth === null ? null : wealth * feePct / 100 / 12;
-  if (partial) {
-    const change = finiteNumber(s.wealthChangeSincePreviousMonthEndPercent);
-    return `<p>Na posição de <strong>${fmt.date(report.positionFinalDate || report.periodEnd)}</strong>, a carteira apresenta patrimônio de <strong>${wealth === null ? '—' : fmt.brl(wealth)}</strong>${accumulated === null ? '' : ` e rentabilidade total de <strong>${fmt.pct(accumulated)}</strong>`}. ${change === null ? '' : `Desde o último fechamento mensal disponível, o patrimônio avançou <strong>${fmt.pct(change)}</strong>.`}</p>
-    <p>O valor aplicado informado pelo Investidor10 é de <strong>${invested === null ? '—' : fmt.brl(invested)}</strong>${gain === null ? '' : `, com ganho de capital acumulado de <strong>${fmt.brl(gain)}</strong>`}. Como outubro ainda está em andamento, esta leitura é um <strong>snapshot parcial</strong> e não substitui o fechamento mensal.</p>
-    <p>Considerando a taxa cadastrada de <strong>${feePct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a.</strong>, os honorários mensais estimados sobre o patrimônio atual são de <strong>${fee === null ? '—' : fmt.brl(fee)}</strong>.</p>`;
-  }
-  const vsCdi = periodReturn !== null && cdi !== null ? periodReturn - cdi : null;
-  return `<p>No período, a carteira apresentou rentabilidade de <strong>${periodReturn === null ? '—' : fmt.pct(periodReturn)}</strong>${cdi === null ? '' : `, enquanto o CDI ficou em <strong>${fmt.pct(cdi)}</strong>`}${vsCdi === null ? '' : `. A diferença foi de <strong>${fmt.pp(vsCdi)}</strong>`}.</p>
-  <p>O patrimônio encerrou o período em <strong>${wealth === null ? '—' : fmt.brl(wealth)}</strong>${gain === null ? '' : `, com ganho de capital acumulado de <strong>${fmt.brl(gain)}</strong>`}. A estratégia continua sendo acompanhada pela distribuição entre as classes e pela aderência às metas definidas.</p>
-  <p>Com taxa de <strong>${feePct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a.</strong>, os honorários estimados para o mês são de <strong>${fee === null ? '—' : fmt.brl(fee)}</strong>.</p>`;
+  const fee = ctx.closingWealth === null ? null : ctx.closingWealth * feePct / 100 / 12;
+  const snapshotDate = fmt.date(report.positionFinalDate || report.periodEnd);
+  let first = `<p>Em <strong>${fmt.month(ctx.analysisPeriod)}</strong>, a carteira apresentou rentabilidade oficial de <strong>${ctx.monthlyReturn === null ? '—' : fmt.pct(ctx.monthlyReturn)}</strong>`;
+  if (cdi !== null) first += `, enquanto o CDI do período ficou em <strong>${fmt.pct(cdi)}</strong>`;
+  if (vsCdi !== null) first += `. A diferença foi de <strong>${fmt.pp(vsCdi)}</strong>`;
+  first += '.</p>';
+  const second = `<p>O patrimônio fechou o mês em <strong>${ctx.closingWealth === null ? '—' : fmt.brl(ctx.closingWealth)}</strong>${ctx.monthlyGain === null ? '' : `, com ganho de capital de <strong>${fmt.brl(ctx.monthlyGain)}</strong> no mês`}${ctx.accumulatedGain === null ? '' : ` e ganho total acumulado de <strong>${fmt.brl(ctx.accumulatedGain)}</strong>`}. ${ctx.previousWealth === null ? '' : `No fechamento anterior, o patrimônio era de <strong>${fmt.brl(ctx.previousWealth)}</strong>.`}</p>`;
+  const third = `<p>A distribuição exibida nas páginas seguintes usa a posição mais recente disponível, capturada em <strong>${snapshotDate}</strong>. Isso permite comentar setembro como mês fechado sem perder a fotografia atual da carteira para os próximos ajustes.</p>`;
+  const fourth = `<p>Considerando a taxa cadastrada de <strong>${feePct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a.</strong>, os honorários estimados sobre o patrimônio de fechamento são de <strong>${fee === null ? '—' : fmt.brl(fee)}</strong>.</p>`;
+  return first + second + third + fourth;
 }
 
 function renderI10ExecutiveSummary(data, report) {
-  const s = report.summary || {};
-  const partial = !!report.isPartialSnapshot || !!report.investidor10?.isPartialSnapshot;
-  const wealth = finiteNumber(s.currentWealthPositionDetail);
-  const gain = finiteNumber(s.capitalGain);
-  const accumulated = finiteNumber(s.accumulatedReturnOfficial ?? s.totalReturnOfficial);
-  const periodReturn = finiteNumber(s.periodReturnOfficial);
-  const cdi = finiteNumber(state.market?.cdi?.[state.selectedPeriod]?.value ?? s.cdiReturn);
+  const ctx = i10AnalysisContext(data, report);
+  const cdi = i10CdiForAnalysisPeriod(data, report, ctx);
+  const benchmarkDiff = ctx.monthlyReturn !== null && cdi !== null ? ctx.monthlyReturn - cdi : null;
   const feePct = i10ClientFeeAnnualPct(data);
-  const fee = wealth === null ? null : wealth * feePct / 100 / 12;
-  const primaryReturn = partial ? accumulated : periodReturn;
-  const primaryLabel = partial ? 'Rentabilidade total' : 'Rentabilidade';
-  const primaryHint = partial ? 'Acumulada no Investidor10' : 'Performance do período';
-  const benchmarkDiff = !partial && primaryReturn !== null && cdi !== null ? primaryReturn - cdi : null;
-  const secondLabel = benchmarkDiff !== null ? `vs. CDI (${fmt.pct(cdi)})` : 'Ganho de capital';
-  const secondValue = benchmarkDiff !== null ? fmt.pp(benchmarkDiff) : (gain === null ? '—' : fmt.brl(gain));
-  const secondHint = benchmarkDiff !== null ? (benchmarkDiff >= 0 ? 'Acima do benchmark' : 'Abaixo do benchmark') : 'Acumulado no snapshot';
+  const fee = ctx.closingWealth === null ? null : ctx.closingWealth * feePct / 100 / 12;
+  const secondLabel = benchmarkDiff !== null ? `vs. CDI (${fmt.pct(cdi)})` : 'Ganho no mês';
+  const secondValue = benchmarkDiff !== null ? fmt.pp(benchmarkDiff) : (ctx.monthlyGain === null ? '—' : fmt.brl(ctx.monthlyGain));
+  const secondHint = benchmarkDiff !== null ? (benchmarkDiff >= 0 ? 'Acima do benchmark' : 'Abaixo do benchmark') : 'Variação do ganho de capital';
   return `
   <section class="report-page" id="i10Executive">
     ${renderHead('Resumo executivo', data, report)}
     <div class="report-body">
       <div class="grid two">
-        <div class="metric-card"><div class="metric-label">${escapeHtml(primaryLabel)}</div><div class="metric-value ${primaryReturn !== null && primaryReturn >= 0 ? 'value-positive' : ''}">${primaryReturn === null ? '—' : fmt.pct(primaryReturn)}</div><div class="metric-hint">${escapeHtml(primaryHint)}</div></div>
-        <div class="metric-card"><div class="metric-label">${escapeHtml(secondLabel)}</div><div class="metric-value ${benchmarkDiff !== null ? (benchmarkDiff >= 0 ? 'value-positive' : 'value-negative') : (gain !== null && gain >= 0 ? 'value-positive' : '')}">${secondValue}</div><div class="metric-hint">${escapeHtml(secondHint)}</div></div>
-        <div class="metric-card"><div class="metric-label">Patrimônio</div><div class="metric-value">${wealth === null ? '—' : fmt.brl(wealth)}</div><div class="metric-hint">Total acompanhado</div></div>
+        <div class="metric-card"><div class="metric-label">Rentabilidade · ${escapeHtml(fmt.month(ctx.analysisPeriod))}</div><div class="metric-value ${ctx.monthlyReturn !== null && ctx.monthlyReturn >= 0 ? 'value-positive' : ''}">${ctx.monthlyReturn === null ? '—' : fmt.pct(ctx.monthlyReturn)}</div><div class="metric-hint">Performance oficial do mês fechado</div></div>
+        <div class="metric-card"><div class="metric-label">${escapeHtml(secondLabel)}</div><div class="metric-value ${benchmarkDiff !== null ? (benchmarkDiff >= 0 ? 'value-positive' : 'value-negative') : (ctx.monthlyGain !== null && ctx.monthlyGain >= 0 ? 'value-positive' : '')}">${secondValue}</div><div class="metric-hint">${escapeHtml(secondHint)}</div></div>
+        <div class="metric-card"><div class="metric-label">Patrimônio no fechamento</div><div class="metric-value">${ctx.closingWealth === null ? '—' : fmt.brl(ctx.closingWealth)}</div><div class="metric-hint">Fechamento de ${escapeHtml(fmt.month(ctx.analysisPeriod))}</div></div>
         <div class="metric-card"><div class="metric-label">Honorários LGV</div><div class="metric-value">${fee === null ? '—' : fmt.brl(fee)}</div><div class="metric-hint">${feePct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a. · estimativa mensal</div></div>
       </div>
       <div class="section-title">Análise de performance</div>
       <div class="chart-card i10-summary-copy">${i10ExecutiveNarrative(data, report)}</div>
-      ${partial ? '<div class="note-card" style="margin-top:14px;"><strong>Leitura parcial</strong><p>O mês ainda não está fechado. Rentabilidade mensal oficial, comparação mensal com CDI e honorários definitivos devem ser confirmados no fechamento.</p></div>' : ''}
     </div>${renderFooter()}
   </section>`;
 }
@@ -3223,11 +3258,9 @@ function i10AllocationNarrative(rows) {
   const ordered = rows.map(r => ({...r, diff: (Number(r.currentWeight)||0) - (Number(r.targetWeight)||0)}));
   const rf = ordered.find(r => r.classLGV === 'renda_fixa');
   const under = [...ordered].sort((a,b)=>a.diff-b.diff).filter(r=>r.diff < -0.0025).slice(0,2);
-  const over = [...ordered].sort((a,b)=>b.diff-a.diff).filter(r=>r.diff > 0.0025).slice(0,2);
-  let text = rf ? `A Renda Fixa representa <strong>${fmt.pct(rf.currentWeight || 0)}</strong> da carteira, frente à meta de <strong>${fmt.pct(rf.targetWeight || 0)}</strong>. ` : '';
-  if (under.length) text += `As principais posições abaixo da meta são ${under.map(r=>`<strong>${escapeHtml(i10ClassLabel(r.classLGV))}</strong> (${fmt.pct(r.currentWeight||0)} vs. ${fmt.pct(r.targetWeight||0)})`).join(' e ')}. `;
-  if (over.length) text += `Acima da meta, destacam-se ${over.map(r=>`<strong>${escapeHtml(i10ClassLabel(r.classLGV))}</strong> (${fmt.pct(r.currentWeight||0)} vs. ${fmt.pct(r.targetWeight||0)})`).join(' e ')}. `;
-  text += 'Os ajustes podem ser conduzidos gradualmente com os próximos aportes, evitando movimentações desnecessárias.';
+  let text = rf ? `A carteira segue concentrada em <strong>Renda Fixa</strong>, que representa <strong>${fmt.pct(rf.currentWeight || 0)}</strong> do patrimônio, muito próxima da meta estratégica de <strong>${fmt.pct(rf.targetWeight || 0)}</strong>. ` : '';
+  if (under.length) text += `Os principais espaços para novos aportes estão em ${under.map(r=>`<strong>${escapeHtml(i10ClassLabel(r.classLGV))}</strong> (${fmt.pct(r.currentWeight||0)} frente à meta de ${fmt.pct(r.targetWeight||0)})`).join(' e ')}. `;
+  text += 'A leitura continua sendo de ajustes graduais por meio dos próximos aportes, sem necessidade de grandes movimentações na carteira.';
   return text;
 }
 
@@ -3235,7 +3268,7 @@ function renderI10Allocation(data, report) {
   const rows = report.allocationByClass || [];
   const palette = ['#f0a51d','#6b5cff','#3ca370','#cf5c78','#55a8d8'];
   const legend = rows.map((r,i)=>`<div class="i10-legend-row"><span class="i10-legend-label"><span class="i10-legend-swatch" style="background:${palette[i%palette.length]}"></span>${escapeHtml(i10ClassLabel(r.classLGV))}</span><strong>${fmt.pct(r.currentWeight||0)}</strong></div>`).join('');
-  const table = `<table class="table i10-allocation-table"><thead><tr><th>Categoria</th><th class="num">Valor atual</th><th class="num">Atual</th><th class="num">Meta</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHtml(i10ClassLabel(r.classLGV))}</td><td class="num">${fmt.brl(r.currentValue||0)}</td><td class="num"><strong>${fmt.pct(r.currentWeight||0)}</strong></td><td class="num">${fmt.pct(r.targetWeight||0)}</td></tr>`).join('')}</tbody></table>`;
+  const table = `<table class="table i10-allocation-table"><thead><tr><th>Categoria</th><th class="num">Atual</th><th class="num">Meta</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHtml(i10ClassLabel(r.classLGV))}</td><td class="num"><strong>${fmt.pct(r.currentWeight||0)}</strong></td><td class="num">${fmt.pct(r.targetWeight||0)}</td></tr>`).join('')}</tbody></table>`;
   return `
   <section class="report-page" id="i10Allocation">
     ${renderHead('Distribuição da carteira', data, report)}
@@ -3244,7 +3277,7 @@ function renderI10Allocation(data, report) {
       <div class="chart-card">
         <div class="i10-allocation-wrap">
           <div><div class="i10-donut" style="background:conic-gradient(${i10DonutGradient(rows)})"></div><div class="i10-legend">${legend}</div></div>
-          <div>${table}</div>
+          <div>${table}<div class="chart-subtitle" style="margin-top:10px;">Posição atual capturada em ${fmt.date(report.positionFinalDate || report.periodEnd)}.</div></div>
         </div>
       </div>
       <div class="section-title">Leitura da alocação</div>
@@ -3294,19 +3327,21 @@ function renderI10AssetPerformance(data, report) {
     rows.push(`<tr class="i10-group-row"><td colspan="4">Criptomoedas</td></tr>`);
     crypto.forEach(p => rows.push(`<tr><td>${escapeHtml(i10AssetAlias(p))}</td><td>Criptomoedas</td><td class="num ${finiteNumber(p.sourceSnapshotReturn) >= 0 ? 'value-positive' : 'value-negative'}"><strong>${p.sourceSnapshotReturn == null ? '—' : fmt.pct(p.sourceSnapshotReturn)}</strong></td><td class="num">${i10PositionDisplayValue(p) == null ? '—' : fmt.brl(i10PositionDisplayValue(p))}</td></tr>`));
   }
-  const wealth = finiteNumber(s.currentWealthPositionDetail);
-  const gain = finiteNumber(s.capitalGain);
+  const ctx = i10AnalysisContext(data, report);
+  const wealth = ctx.closingWealth;
+  const gain = ctx.accumulatedGain;
   return `
   <section class="report-page" id="i10Assets">
-    ${renderHead(`Performance dos ativos e perspectivas · ${fmt.date(report.positionFinalDate || report.periodEnd)}`, data, report)}
+    ${renderHead(`Performance dos ativos e perspectivas · posição em ${fmt.date(report.positionFinalDate || report.periodEnd)}`, data, report)}
     <div class="report-body">
       <div class="chart-card"><table class="table i10-asset-table"><thead><tr><th>Ativo</th><th>Grupo</th><th class="num">Rentabilidade</th><th class="num">Valor atual</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
       <div class="section-title">Resumo consolidado</div>
       <div class="i10-summary-lines">
-        <div class="i10-summary-line"><span>Patrimônio total</span><strong>${wealth === null ? '—' : fmt.brl(wealth)}</strong></div>
-        <div class="i10-summary-line"><span>Ganho total acumulado</span><strong class="${gain !== null && gain >= 0 ? 'value-positive' : 'value-negative'}">${gain === null ? '—' : fmt.brl(gain)}</strong></div>
+        <div class="i10-summary-line"><span>Patrimônio no fechamento de ${escapeHtml(fmt.month(ctx.analysisPeriod))}</span><strong>${wealth === null ? '—' : fmt.brl(wealth)}</strong></div>
+        <div class="i10-summary-line"><span>Ganho de capital no mês</span><strong class="${ctx.monthlyGain !== null && ctx.monthlyGain >= 0 ? 'value-positive' : 'value-negative'}">${ctx.monthlyGain === null ? '—' : fmt.brl(ctx.monthlyGain)}</strong></div>
+        <div class="i10-summary-line"><span>Ganho total acumulado no fechamento</span><strong class="${gain !== null && gain >= 0 ? 'value-positive' : 'value-negative'}">${gain === null ? '—' : fmt.brl(gain)}</strong></div>
       </div>
-      <div class="chart-subtitle" style="margin-top:10px;">Rentabilidades preservadas conforme exibidas pelo Investidor10 no snapshot selecionado.</div>
+      <div class="chart-subtitle" style="margin-top:10px;">A análise mensal acima é de ${escapeHtml(fmt.month(ctx.analysisPeriod))}. As rentabilidades e valores por ativo são preservados conforme exibidos no snapshot do Investidor10 em ${fmt.date(report.positionFinalDate || report.periodEnd)}.</div>
     </div>${renderFooter()}
   </section>`;
 }
@@ -3317,7 +3352,8 @@ function renderInvestidor10Report(data, report) {
   const partial = !!report.isPartialSnapshot || !!report.investidor10?.isPartialSnapshot;
   const wealth = finiteNumber(summary.currentWealthPositionDetail) || 0;
 
-  document.getElementById('reportSubtitle').textContent = `${data.client?.name || 'Cliente'} · Investidor10 · ${partial ? 'snapshot parcial' : 'relatório mensal'} · ${fmt.date(report.positionFinalDate || report.periodEnd)}`;
+  const ctx = i10AnalysisContext(data, report);
+  document.getElementById('reportSubtitle').textContent = `${data.client?.name || 'Cliente'} · relatório de ${fmt.month(ctx.analysisPeriod)} · posição atual em ${fmt.date(report.positionFinalDate || report.periodEnd)}`;
   const cdiPill = document.getElementById('cdiPill');
   const ipcaPill = document.getElementById('ipcaPill');
   const reconcilePill = document.getElementById('reconcilePill');
@@ -3383,16 +3419,20 @@ function renderReport() {
 
 function renderHead(title, data, report) {
   const client = data.client || {};
+  const i10 = isInvestidor10Report(data, report);
+  const ctx = i10 ? i10AnalysisContext(data, report) : null;
+  const displayPeriod = ctx?.analysisPeriod || state.selectedPeriod;
+  const baseLabel = i10 && ctx?.partial ? 'Posição atual' : 'Data-base da posição';
   return `
     <div class="report-head">
       <div>
         <div class="brand">LGV CAPITAL</div>
-        <div class="subtitle">${escapeHtml(title)} · ${fmt.month(state.selectedPeriod)}</div>
+        <div class="subtitle">${escapeHtml(title)} · ${fmt.month(displayPeriod)}</div>
       </div>
       <div class="client-meta">
         <strong>${escapeHtml(client.name || 'Cliente')}</strong>
         Perfil: ${escapeHtml(client.profile || '—')}<br />
-        Data-base da posição: ${fmt.date(report.positionFinalDate || report.periodEnd)}
+        ${baseLabel}: ${fmt.date(report.positionFinalDate || report.periodEnd)}
       </div>
     </div>`;
 }
@@ -4611,7 +4651,8 @@ function splitCommentTextForPages(text, maxUnits = 3200) {
 }
 
 function renderCommentPages(data, report) {
-  const text = getConsultantCommentText(data, state.selectedPeriod);
+  const commentPeriod = isInvestidor10Report(data, report) ? i10AnalysisContext(data, report).analysisPeriod : state.selectedPeriod;
+  const text = getConsultantCommentText(data, commentPeriod) || getConsultantCommentText(data, state.selectedPeriod);
   const chunks = splitCommentTextForPages(text, 3200);
   return chunks.map((chunk, index) => {
     const isFirst = index === 0;
