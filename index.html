@@ -2036,7 +2036,7 @@
   </div>
 
 <script>
-// LGV Invest V4.7 — mês analisado + memória persistente de snapshots/fluxos Investidor10
+// LGV Invest V4.7.1 — impressão Investidor10 com capa/comentário + mês analisado no arquivo
 const REPORT_BLOCKS = [
   { key: 'wealth', label: 'Patrimônio consolidado' },
   { key: 'summaryCards', label: 'Cards de resumo' },
@@ -3545,7 +3545,8 @@ function renderInvestidor10Report(data, report) {
   }
 
   const pages = [renderI10Cover(data, report)];
-  if (isBlockEnabled('comment')) pages.push(...renderCommentPages(data, report));
+  // Investidor10: capa e comentário são partes fixas do relatório ao cliente.
+  pages.push(...renderCommentPages(data, report));
   pages.push(renderI10ExecutiveSummary(data, report));
   pages.push(renderI10Allocation(data, report));
   pages.push(renderI10AssetPerformance(data, report));
@@ -5390,7 +5391,10 @@ function sanitizeFileName(value) {
 function getPdfFileName() {
   const data = state.data || {};
   const clientName = data.client?.name || data.clientName || 'cliente';
-  const period = state.selectedPeriod || 'periodo';
+  const report = getReport();
+  const period = report && isInvestidor10Report(data, report)
+    ? (i10AnalysisContext(data, report).analysisPeriod || state.selectedPeriod || 'periodo')
+    : (state.selectedPeriod || 'periodo');
   const format = state.reportFormat === 'mobile' ? 'mobile' : 'a4';
   return `lgv_relatorio_${sanitizeFileName(clientName)}_${period}_${format}.pdf`;
 }
@@ -5655,17 +5659,46 @@ function buildSmartA4Pagination() {
   const data = state.data;
   const report = getReport();
   const pages = [];
-  const pack = { root, data, report, pages, currentPage: makeSmartA4Page(root, data, report, 0) };
-  pages.push(pack.currentPage);
-
   const sourcePages = Array.from(sourceRoot.querySelectorAll('.report-page'))
     .filter(page => page.offsetWidth > 0 && page.offsetHeight > 0 && getComputedStyle(page).display !== 'none');
+  const isI10 = !!report && isInvestidor10Report(data, report);
+
+  // Investidor10: a capa é uma página editorial completa e não deve ser desmontada
+  // pela paginação inteligente. Clonamos a página inteira antes de paginar o miolo.
+  if (isI10) {
+    const sourceCover = sourcePages.find(page => page.classList.contains('i10-cover-page'));
+    if (sourceCover) {
+      const cover = sourceCover.cloneNode(true);
+      cover.id = 'i10CoverPdf';
+      cover.classList.add('smart-a4-preserved-cover');
+      root.appendChild(cover);
+      pages.push(cover);
+    }
+  }
+
+  const flowPage = makeSmartA4Page(root, data, report, pages.length);
+  const pack = { root, data, report, pages, currentPage: flowPage };
+  pages.push(flowPage);
 
   let commentInserted = false;
   sourcePages.forEach(page => {
+    if (isI10 && page.classList.contains('i10-cover-page')) return;
+
     if (page.classList.contains('comment-page')) {
       if (!commentInserted) {
-        appendSmartCommentText(pack, getConsultantCommentText(data, state.selectedPeriod));
+        const commentPeriod = isI10
+          ? i10AnalysisContext(data, report).analysisPeriod
+          : state.selectedPeriod;
+        const commentText = getConsultantCommentText(data, commentPeriod)
+          || getConsultantCommentText(data, state.selectedPeriod);
+
+        if (String(commentText || '').trim()) {
+          appendSmartCommentText(pack, commentText);
+        } else {
+          // Se o comentário ainda não foi preenchido, mantém a página/aviso no PDF
+          // em vez de removê-la silenciosamente.
+          getPageFlowGroups(page).forEach(group => appendSmartGroup(pack, group));
+        }
         commentInserted = true;
       }
       return;
@@ -5673,10 +5706,13 @@ function buildSmartA4Pagination() {
     getPageFlowGroups(page).forEach(group => appendSmartGroup(pack, group));
   });
 
-  // Remove eventual última folha vazia.
-  while (pages.length > 1 && !smartBodyHasContent(pages[pages.length - 1])) {
-    const empty = pages.pop();
-    empty.remove();
+  // Remove eventual última folha de fluxo vazia, preservando a capa clonada.
+  while (pages.length > 1) {
+    const last = pages[pages.length - 1];
+    const body = smartPageBody(last);
+    if (!body || body.children.length > 0) break;
+    pages.pop();
+    last.remove();
     pack.currentPage = pages[pages.length - 1];
   }
 
