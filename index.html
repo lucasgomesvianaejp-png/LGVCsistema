@@ -3800,8 +3800,35 @@ function i10AllocationNarrative(rows) {
   return `<p>${p1}</p><p>${p2}</p>`;
 }
 
+function i10AllocationRowsWithProfileTargets(data, report) {
+  const rows = Array.isArray(report?.allocationByClass) ? report.allocationByClass : [];
+  const profileTargets = Array.isArray(data?.allocationPolicy?.targets) ? data.allocationPolicy.targets : [];
+  const targetMap = new Map();
+  profileTargets.forEach(target => {
+    const key = String(target?.classLGV || '').trim();
+    const weight = finiteNumber(target?.targetWeight);
+    if (key && weight !== null) targetMap.set(key, weight);
+  });
+  return rows.map(row => {
+    const key = String(row?.classLGV || '').trim();
+    const profileTarget = targetMap.has(key) ? targetMap.get(key) : finiteNumber(row?.targetWeight);
+    const currentWeight = finiteNumber(row?.currentWeight) ?? 0;
+    const currentValue = finiteNumber(row?.currentValue);
+    const totalWealth = finiteNumber(report?.summary?.currentWealthPositionDetail, report?.summary?.currentWealthMonthlyPerformance);
+    const targetValue = profileTarget !== null && totalWealth !== null ? totalWealth * profileTarget : finiteNumber(row?.targetValue);
+    return {
+      ...row,
+      targetWeight: profileTarget,
+      targetValue,
+      differenceWeight: profileTarget !== null ? currentWeight - profileTarget : finiteNumber(row?.differenceWeight),
+      differenceValue: currentValue !== null && targetValue !== null ? currentValue - targetValue : finiteNumber(row?.differenceValue),
+      targetSource: targetMap.has(key) ? 'client_profile' : (row?.targetSource || 'snapshot')
+    };
+  });
+}
+
 function renderI10Allocation(data, report) {
-  const rows = report.allocationByClass || [];
+  const rows = i10AllocationRowsWithProfileTargets(data, report);
   const palette = ['#f0a51d','#6b5cff','#3ca370','#cf5c78','#55a8d8'];
   const legend = rows.map((r,i)=>`<div class="i10-legend-row"><span class="i10-legend-label"><span class="i10-legend-swatch" style="background:${palette[i%palette.length]}"></span>${escapeHtml(i10ClassLabel(r.classLGV))}</span><strong>${fmt.pct(r.currentWeight||0)}</strong></div>`).join('');
   const table = `<table class="table i10-allocation-table"><thead><tr><th>Categoria</th><th class="num">Atual</th><th class="num">Meta</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHtml(i10ClassLabel(r.classLGV))}</td><td class="num"><strong>${fmt.pct(r.currentWeight||0)}</strong></td><td class="num">${fmt.pct(r.targetWeight||0)}</td></tr>`).join('')}</tbody></table>`;
