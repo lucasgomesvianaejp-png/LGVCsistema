@@ -1,0 +1,18 @@
+{
+  "externalFlows": [
+    {
+      "date": "2026-10-15",
+      "type": "aporte",
+      "value": 2000.00,
+      "assetId": "TESOURO_IPCA_2040",
+      "note": "Aporte mensal"
+    },
+    {
+      "date": "2026-10-28",
+      "type": "resgate",
+      "value": 500.00,
+      "assetId": "CDB_ITAU_1",
+      "note": "Resgate parcial"
+    }
+  ]
+}

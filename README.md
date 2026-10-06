@@ -91,3 +91,20 @@ Principais ajustes:
 - CDI/IPCA, quando atualizados, usam o mês analisado e não o mês parcial do snapshot.
 
 Veja `FIX_INVESTIDOR10_MONTH_CLOSE_V4_6.md`.
+
+## v4.7 — memória de snapshots, fluxos e seletor por mês analisado (Investidor10)
+
+O fluxo Investidor10 agora separa definitivamente **mês analisado** de **data do snapshot**.
+
+- O seletor exibe o mês analisado (ex.: `setembro de 2026`).
+- A data-base aparece logo abaixo como `Snapshot da carteira: 05/10/2026`.
+- Cada importação Investidor10 passa a alimentar `investidor10Memory.snapshots`, preservando a fotografia completa por data.
+- A memória anterior é migrada automaticamente a partir do último snapshot já salvo antes de incorporar o novo JSON.
+- O JSON pode trazer `externalFlows` com aportes/resgates. Basta informar data, tipo, valor e ativo; classe LGV e motor são preenchidos pelo cadastro de ativos quando disponíveis.
+- Aportes/resgates são persistidos sem duplicação em `investidor10Memory.externalFlows`.
+- Quando houver dois snapshots completos, o sistema calcula internamente o resultado líquido de fluxos e uma taxa estimada por **Modified Dietz**, inclusive por classe e motor quando houver dados suficientes.
+- A rentabilidade oficial da fonte continua tendo prioridade quando existir. O cálculo entre snapshots só é usado como fallback e é identificado como estimativa LGV.
+- Comentários do Investidor10 podem ser gravados pelo mês analisado sem criar um falso mês de relatório no seletor.
+- A leitura da alocação voltou a ser texto corrido em dois parágrafos, com destaque apenas para desvios relevantes e prioridades de novos aportes.
+
+Veja `FIX_INVESTIDOR10_MEMORY_V4_7.md` e `EXEMPLO_FLUXOS_INVESTIDOR10.json`.

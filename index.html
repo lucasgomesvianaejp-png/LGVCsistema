@@ -382,7 +382,7 @@
 
 
 
-    /* V4.6 — relatório Investidor10: análise do último mês fechado + posição atual */
+    /* V4.7 — relatório Investidor10: mês analisado + memória persistente */
     .i10-cover-page { background: var(--black); color: white; border-top: 10px solid var(--gold); }
     .i10-cover-inner { min-height: 920px; padding: 92px 72px; display:flex; flex-direction:column; justify-content:center; }
     .i10-cover-kicker { color: var(--gold); font-weight: 900; letter-spacing: .12em; text-transform: uppercase; font-size: 14px; }
@@ -405,6 +405,11 @@
     .i10-summary-lines { display:grid; gap:8px; margin-top:14px; }
     .i10-summary-line { display:flex; justify-content:space-between; gap:18px; padding:10px 12px; border-radius:10px; background:#fffaf1; border:1px solid #f0dfbe; }
     .i10-summary-line strong { white-space:nowrap; }
+    .i10-allocation-copy { font-size: 13.5px; line-height: 1.62; color:#4d4943; }
+    .i10-allocation-copy p { margin: 0 0 10px; }
+    .i10-allocation-copy p:last-child { margin-bottom: 0; }
+    .i10-allocation-copy strong { display:inline; margin:0; color:#2f2a23; }
+    .period-select-meta { margin-top:6px; color:var(--muted); font-size:10.5px; line-height:1.35; min-height:14px; }
 
     @media (max-width: 920px) {
       .control-grid, .grid.two, .grid.three, .grid.four, .kpi-grid, .motor-layout, .assumptions-grid, .income-summary-grid.four-cards { grid-template-columns: 1fr; }
@@ -1923,10 +1928,11 @@
                     <option value="">Selecione um cliente</option>
                   </select>
 
-                  <label for="periodSelect">Mês disponível</label>
+                  <label id="periodSelectLabel" for="periodSelect">Mês disponível</label>
                   <select id="periodSelect" class="select-box" disabled>
                     <option>Importe um JSON</option>
                   </select>
+                  <div id="periodSelectMeta" class="period-select-meta"></div>
 
                   <label for="goalMode">Premissa da meta</label>
                   <select id="goalMode" class="select-box" disabled>
@@ -2030,7 +2036,7 @@
   </div>
 
 <script>
-// LGV Invest V4.6 — relatório Investidor10 por mês fechado + posição atual
+// LGV Invest V4.7 — mês analisado + memória persistente de snapshots/fluxos Investidor10
 const REPORT_BLOCKS = [
   { key: 'wealth', label: 'Patrimônio consolidado' },
   { key: 'summaryCards', label: 'Cards de resumo' },
@@ -2270,12 +2276,39 @@ function validateSchema(data) {
   return { ok:true, message:'OK' };
 }
 
+function i10SelectorContext(period) {
+  const report = state.data?.reportSnapshots?.[period] || null;
+  if (!report || !isInvestidor10Report(state.data, report)) return null;
+  const ctx = i10AnalysisContext(state.data, report);
+  const snapshotDate = report.positionFinalDate || report.snapshotDate || report.source?.referenceDate || null;
+  const memoryCount = Object.keys(state.data?.investidor10Memory?.snapshots || {}).length;
+  return { report, ctx, snapshotDate, memoryCount };
+}
+
+function updatePeriodSelectMeta() {
+  const label = document.getElementById('periodSelectLabel');
+  const meta = document.getElementById('periodSelectMeta');
+  const context = state.selectedPeriod ? i10SelectorContext(state.selectedPeriod) : null;
+  if (label) label.textContent = context ? 'Mês analisado' : 'Mês disponível';
+  if (!meta) return;
+  if (!context) { meta.textContent = ''; return; }
+  const parts = [];
+  if (context.snapshotDate) parts.push(`Snapshot da carteira: ${fmt.date(context.snapshotDate)}`);
+  if (context.memoryCount) parts.push(`memória: ${context.memoryCount} snapshot${context.memoryCount === 1 ? '' : 's'}`);
+  meta.textContent = parts.join(' · ');
+}
+
 function hydratePeriodSelect() {
   const select = document.getElementById('periodSelect');
   const periods = getAvailablePeriods();
-  select.innerHTML = periods.map(p => `<option value="${p}">${fmt.month(p)}</option>`).join('');
+  select.innerHTML = periods.map(p => {
+    const context = i10SelectorContext(p);
+    const label = context?.ctx?.analysisPeriod ? fmt.month(context.ctx.analysisPeriod) : fmt.month(p);
+    return `<option value="${p}">${escapeHtml(label)}</option>`;
+  }).join('');
   select.disabled = periods.length === 0;
   if (state.selectedPeriod) select.value = state.selectedPeriod;
+  updatePeriodSelectMeta();
 }
 
 function normalizeGoalObjective(value) {
@@ -2300,7 +2333,9 @@ function hydrateGoalControls(data) {
 
 function getConsultantCommentText(data, period) {
   const r = data?.reportSnapshots?.[period] || {};
+  const periodComment = data?.consultantComments?.[period] || null;
   const sources = [
+    periodComment,
     r.consultantComment,
     r.commentary,
     data?.consultantComment,
@@ -2372,11 +2407,20 @@ function saveCommentPatches() {
 
 function mergeConsultantComment(period, comment) {
   if (!state.data || !comment) return false;
-  const targetPeriod = period === '__default__' ? state.selectedPeriod : period;
+  const currentReport = getReport();
+  const currentI10 = currentReport && isInvestidor10Report(state.data, currentReport);
+  const currentAnalysisPeriod = currentI10 ? i10AnalysisContext(state.data, currentReport).analysisPeriod : null;
+  let targetPeriod = period === '__default__' ? (currentAnalysisPeriod || state.selectedPeriod) : period;
   if (!targetPeriod) return false;
-  if (!state.data.reportSnapshots) state.data.reportSnapshots = {};
-  if (!state.data.reportSnapshots[targetPeriod]) state.data.reportSnapshots[targetPeriod] = {};
-  state.data.reportSnapshots[targetPeriod].consultantComment = comment;
+
+  if (currentI10 && targetPeriod === currentAnalysisPeriod) {
+    state.data.consultantComments = state.data.consultantComments || {};
+    state.data.consultantComments[targetPeriod] = comment;
+  } else {
+    if (!state.data.reportSnapshots) state.data.reportSnapshots = {};
+    if (!state.data.reportSnapshots[targetPeriod]) state.data.reportSnapshots[targetPeriod] = {};
+    state.data.reportSnapshots[targetPeriod].consultantComment = comment;
+  }
   localStorage.setItem('lgv_reports_last_json', JSON.stringify(state.data));
   if (typeof window.lgvFirebaseScheduleSave === 'function') window.lgvFirebaseScheduleSave('comentário atualizado');
   return true;
@@ -2386,9 +2430,11 @@ function applyStoredCommentPatches() {
   state.commentPatches = { ...loadCommentPatches(), ...(state.commentPatches || {}) };
   const patches = state.commentPatches || {};
   const available = getAvailablePeriods();
+  const analysisPeriods = available.map(p => i10SelectorContext(p)?.ctx?.analysisPeriod).filter(Boolean);
+  const acceptedPeriods = new Set([...available, ...analysisPeriods]);
   let changed = false;
   Object.keys(patches).forEach(period => {
-    if (period !== '__default__' && available.length && !available.includes(period)) return;
+    if (period !== '__default__' && acceptedPeriods.size && !acceptedPeriods.has(period)) return;
     if (mergeConsultantComment(period, patches[period])) {
       delete state.commentPatches[period];
       changed = true;
@@ -3129,6 +3175,90 @@ function i10PreviousPeriod(period) {
   return `${y}-${String(mon).padStart(2,'0')}`;
 }
 
+function i10MemorySnapshots(data) {
+  return Object.values(data?.investidor10Memory?.snapshots || {})
+    .filter(row => row && row.snapshotDate)
+    .sort((a,b) => String(a.snapshotDate).localeCompare(String(b.snapshotDate)));
+}
+
+function i10MemorySnapshotForReport(data, report) {
+  const snapshots = i10MemorySnapshots(data);
+  const snapshotDate = report?.positionFinalDate || report?.snapshotDate || report?.source?.referenceDate || null;
+  if (snapshotDate) {
+    const exact = snapshots.find(row => row.snapshotDate === snapshotDate);
+    if (exact) return exact;
+  }
+  const snapshotPeriod = String(report?.period || state.selectedPeriod || '').slice(0,7);
+  return [...snapshots].reverse().find(row => String(row.snapshotPeriod || '').slice(0,7) === snapshotPeriod) || null;
+}
+
+function i10PreviousMemorySnapshot(data, currentSnapshot) {
+  if (!currentSnapshot?.snapshotDate) return null;
+  const snapshots = i10MemorySnapshots(data).filter(row => String(row.snapshotDate) < String(currentSnapshot.snapshotDate));
+  return snapshots.length ? snapshots[snapshots.length - 1] : null;
+}
+
+function i10ExternalFlowsBetween(data, startDate, endDate) {
+  if (!startDate || !endDate) return [];
+  return (data?.investidor10Memory?.externalFlows || [])
+    .filter(flow => flow?.date && String(flow.date) > String(startDate) && String(flow.date) <= String(endDate))
+    .map(flow => ({ ...flow, signedValue: finiteNumber(flow.signedValue ?? flow.value) }))
+    .filter(flow => flow.signedValue !== null);
+}
+
+function i10ModifiedDietz(startValue, endValue, flows, startDate, endDate) {
+  const start = finiteNumber(startValue);
+  const end = finiteNumber(endValue);
+  if (start === null || end === null || !startDate || !endDate) return null;
+  const startMs = new Date(`${startDate}T00:00:00`).getTime();
+  const endMs = new Date(`${endDate}T00:00:00`).getTime();
+  const totalDays = Math.max(1, (endMs - startMs) / 86400000);
+  let netFlow = 0;
+  let weightedFlow = 0;
+  (flows || []).forEach(flow => {
+    const value = finiteNumber(flow.signedValue ?? flow.value);
+    if (value === null) return;
+    const flowMs = new Date(`${flow.date}T00:00:00`).getTime();
+    const remaining = Math.max(0, Math.min(totalDays, (endMs - flowMs) / 86400000));
+    const weight = remaining / totalDays;
+    netFlow += value;
+    weightedFlow += weight * value;
+  });
+  const result = end - start - netFlow;
+  const denominator = start + weightedFlow;
+  const returnValue = Math.abs(denominator) > 1e-9 ? result / denominator : null;
+  return { startValue:start, endValue:end, netFlow, result, denominator, return:returnValue, startDate, endDate };
+}
+
+function i10SnapshotCyclePerformance(data, report) {
+  const current = i10MemorySnapshotForReport(data, report);
+  const previous = i10PreviousMemorySnapshot(data, current);
+  if (!current || !previous) return null;
+  const flows = i10ExternalFlowsBetween(data, previous.snapshotDate, current.snapshotDate);
+  const portfolio = i10ModifiedDietz(previous.wealth, current.wealth, flows, previous.snapshotDate, current.snapshotDate);
+  if (!portfolio) return null;
+
+  const byClass = {};
+  const previousClasses = Object.fromEntries((previous.allocationByClass || []).map(row => [row.classLGV, row]));
+  (current.allocationByClass || []).forEach(row => {
+    const startRow = previousClasses[row.classLGV];
+    if (!startRow) return;
+    const classFlows = flows.filter(flow => flow.classLGV === row.classLGV);
+    byClass[row.classLGV] = i10ModifiedDietz(startRow.currentValue, row.currentValue, classFlows, previous.snapshotDate, current.snapshotDate);
+  });
+
+  const byMotor = {};
+  const previousMotors = Object.fromEntries((previous.motors || []).map(row => [row.strategicFunction, row]));
+  (current.motors || []).forEach(row => {
+    const startRow = previousMotors[row.strategicFunction];
+    if (!startRow) return;
+    const motorFlows = flows.filter(flow => flow.strategicFunction === row.strategicFunction);
+    byMotor[row.strategicFunction] = i10ModifiedDietz(startRow.currentValue, row.currentValue, motorFlows, previous.snapshotDate, current.snapshotDate);
+  });
+
+  return { current, previous, flows, portfolio, byClass, byMotor };
+}
+
 function i10AnalysisContext(data, report) {
   const partial = !!report?.isPartialSnapshot || !!report?.investidor10?.isPartialSnapshot;
   const snapshotPeriod = String(report?.period || state.selectedPeriod || report?.positionFinalDate?.slice?.(0,7) || '');
@@ -3145,13 +3275,18 @@ function i10AnalysisContext(data, report) {
   const investedValue = finiteNumber(close?.investedValue ?? summary.investedValue);
   const accumulatedGain = finiteNumber(close?.capitalGain ?? (partial ? null : summary.capitalGain));
   const previousGain = finiteNumber(previous?.capitalGain);
-  const monthlyGain = accumulatedGain !== null && previousGain !== null ? accumulatedGain - previousGain : null;
-  const previousWealth = finiteNumber(previous?.wealth);
+  const derivedCycle = i10SnapshotCyclePerformance(data, report);
+  let monthlyGain = accumulatedGain !== null && previousGain !== null ? accumulatedGain - previousGain : null;
+  if (monthlyGain === null && derivedCycle?.portfolio?.result !== null && derivedCycle?.portfolio?.result !== undefined) monthlyGain = derivedCycle.portfolio.result;
+  const previousWealth = finiteNumber(previous?.wealth ?? derivedCycle?.previous?.wealth);
   const wealthChange = closingWealth !== null && previousWealth !== null ? closingWealth - previousWealth : null;
-  const monthlyReturn = finiteNumber(monthly?.monthlyReturn ?? monthly?.periodReturn ?? (!partial ? summary.periodReturnOfficial : null));
+  const officialMonthlyReturn = finiteNumber(monthly?.monthlyReturn ?? monthly?.periodReturn ?? (!partial ? summary.periodReturnOfficial : null));
+  const derivedMonthlyReturn = finiteNumber(derivedCycle?.portfolio?.return);
+  const monthlyReturn = officialMonthlyReturn !== null ? officialMonthlyReturn : derivedMonthlyReturn;
+  const monthlyReturnSource = officialMonthlyReturn !== null ? 'official_source' : (derivedMonthlyReturn !== null ? 'lgv_snapshot_modified_dietz' : 'unavailable');
   return {
-    partial, snapshotPeriod, analysisPeriod, previousPeriod, periodStart, periodEnd, monthly, close, previous,
-    closingWealth, investedValue, accumulatedGain, monthlyGain, previousWealth, wealthChange, monthlyReturn
+    partial, snapshotPeriod, analysisPeriod, previousPeriod, periodStart, periodEnd, monthly, close, previous, derivedCycle,
+    closingWealth, investedValue, accumulatedGain, monthlyGain, previousWealth, wealthChange, monthlyReturn, monthlyReturnSource
   };
 }
 
@@ -3222,13 +3357,16 @@ function renderI10ExecutiveSummary(data, report) {
   const fee = ctx.closingWealth === null ? null : ctx.closingWealth * feePct / 100 / 12;
   const secondLabel = benchmarkDiff !== null ? `vs. CDI (${fmt.pct(cdi)})` : 'Ganho no mês';
   const secondValue = benchmarkDiff !== null ? fmt.pp(benchmarkDiff) : (ctx.monthlyGain === null ? '—' : fmt.brl(ctx.monthlyGain));
-  const secondHint = benchmarkDiff !== null ? (benchmarkDiff >= 0 ? 'Acima do benchmark' : 'Abaixo do benchmark') : 'Variação do ganho de capital';
+  const secondHint = benchmarkDiff !== null ? (benchmarkDiff >= 0 ? 'Acima do benchmark' : 'Abaixo do benchmark') : 'Resultado líquido de aportes e resgates informados';
+  const performanceHint = ctx.monthlyReturnSource === 'lgv_snapshot_modified_dietz'
+    ? `Estimativa LGV entre snapshots (${fmt.date(ctx.derivedCycle?.previous?.snapshotDate)} a ${fmt.date(ctx.derivedCycle?.current?.snapshotDate)})`
+    : 'Performance oficial do mês fechado';
   return `
   <section class="report-page" id="i10Executive">
     ${renderHead('Resumo executivo', data, report)}
     <div class="report-body">
       <div class="grid two">
-        <div class="metric-card"><div class="metric-label">Rentabilidade · ${escapeHtml(fmt.month(ctx.analysisPeriod))}</div><div class="metric-value ${ctx.monthlyReturn !== null && ctx.monthlyReturn >= 0 ? 'value-positive' : ''}">${ctx.monthlyReturn === null ? '—' : fmt.pct(ctx.monthlyReturn)}</div><div class="metric-hint">Performance oficial do mês fechado</div></div>
+        <div class="metric-card"><div class="metric-label">Rentabilidade · ${escapeHtml(fmt.month(ctx.analysisPeriod))}</div><div class="metric-value ${ctx.monthlyReturn !== null && ctx.monthlyReturn >= 0 ? 'value-positive' : ''}">${ctx.monthlyReturn === null ? '—' : fmt.pct(ctx.monthlyReturn)}</div><div class="metric-hint">${escapeHtml(performanceHint)}</div></div>
         <div class="metric-card"><div class="metric-label">${escapeHtml(secondLabel)}</div><div class="metric-value ${benchmarkDiff !== null ? (benchmarkDiff >= 0 ? 'value-positive' : 'value-negative') : (ctx.monthlyGain !== null && ctx.monthlyGain >= 0 ? 'value-positive' : '')}">${secondValue}</div><div class="metric-hint">${escapeHtml(secondHint)}</div></div>
         <div class="metric-card"><div class="metric-label">Patrimônio no fechamento</div><div class="metric-value">${ctx.closingWealth === null ? '—' : fmt.brl(ctx.closingWealth)}</div><div class="metric-hint">Fechamento de ${escapeHtml(fmt.month(ctx.analysisPeriod))}</div></div>
         <div class="metric-card"><div class="metric-label">Honorários LGV</div><div class="metric-value">${fee === null ? '—' : fmt.brl(fee)}</div><div class="metric-hint">${feePct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a. · estimativa mensal</div></div>
@@ -3253,15 +3391,57 @@ function i10DonutGradient(rows) {
   return pieces.join(', ');
 }
 
+function i10JoinPt(items) {
+  const clean = (items || []).filter(Boolean);
+  if (!clean.length) return '';
+  if (clean.length === 1) return clean[0];
+  if (clean.length === 2) return `${clean[0]} e ${clean[1]}`;
+  return `${clean.slice(0,-1).join(', ')} e ${clean.at(-1)}`;
+}
+
 function i10AllocationNarrative(rows) {
-  if (!Array.isArray(rows) || !rows.length) return 'A alocação por classe não está disponível.';
-  const ordered = rows.map(r => ({...r, diff: (Number(r.currentWeight)||0) - (Number(r.targetWeight)||0)}));
-  const rf = ordered.find(r => r.classLGV === 'renda_fixa');
-  const under = [...ordered].sort((a,b)=>a.diff-b.diff).filter(r=>r.diff < -0.0025).slice(0,2);
-  let text = rf ? `A carteira segue concentrada em <strong>Renda Fixa</strong>, que representa <strong>${fmt.pct(rf.currentWeight || 0)}</strong> do patrimônio, muito próxima da meta estratégica de <strong>${fmt.pct(rf.targetWeight || 0)}</strong>. ` : '';
-  if (under.length) text += `Os principais espaços para novos aportes estão em ${under.map(r=>`<strong>${escapeHtml(i10ClassLabel(r.classLGV))}</strong> (${fmt.pct(r.currentWeight||0)} frente à meta de ${fmt.pct(r.targetWeight||0)})`).join(' e ')}. `;
-  text += 'A leitura continua sendo de ajustes graduais por meio dos próximos aportes, sem necessidade de grandes movimentações na carteira.';
-  return text;
+  if (!Array.isArray(rows) || !rows.length) return '<p>A alocação por classe não está disponível.</p>';
+  const normalized = rows.map(r => ({
+    ...r,
+    current: Number(r.currentWeight) || 0,
+    target: Number(r.targetWeight) || 0,
+    diff: (Number(r.currentWeight) || 0) - (Number(r.targetWeight) || 0)
+  }));
+  const rf = normalized.find(r => r.classLGV === 'renda_fixa');
+  const tolerance = 0.005; // 0,50 p.p.
+  const overweight = normalized.filter(r => r.classLGV !== 'renda_fixa' && r.diff > tolerance).sort((a,b)=>b.diff-a.diff);
+  const underweight = normalized.filter(r => r.diff < -tolerance).sort((a,b)=>a.diff-b.diff);
+
+  let p1 = 'A carteira mantém uma estrutura equilibrada em relação à estratégia definida.';
+  if (rf) {
+    const rfDistance = Math.abs(rf.diff);
+    p1 = `A carteira permanece majoritariamente alocada em <strong>Renda Fixa</strong>, com <strong>${fmt.pct(rf.current)}</strong> do patrimônio frente à meta de <strong>${fmt.pct(rf.target)}</strong>. `;
+    p1 += rfDistance <= tolerance
+      ? 'Essa parcela está praticamente alinhada ao planejamento e continua funcionando como a base de estabilidade da carteira.'
+      : (rf.diff > 0
+        ? 'A participação está um pouco acima do planejado, mas continua compatível com o papel de segurança da carteira.'
+        : 'A participação está abaixo do planejado e pode ser recomposta gradualmente nos próximos aportes.');
+  }
+
+  const overText = i10JoinPt(overweight.map(r => `<strong>${escapeHtml(i10ClassLabel(r.classLGV))}</strong>`));
+  const underText = i10JoinPt(underweight.map(r => `<strong>${escapeHtml(i10ClassLabel(r.classLGV))}</strong>`));
+  let p2 = '';
+  if (overText && underText) {
+    p2 = `${overText} ${overweight.length === 1 ? 'está' : 'estão'} acima das respectivas metas, enquanto ${underText} ${underweight.length === 1 ? 'permanece' : 'permanecem'} abaixo do planejado. `;
+  } else if (underText) {
+    p2 = `${underText} ${underweight.length === 1 ? 'permanece' : 'permanecem'} abaixo das respectivas metas. `;
+  } else if (overText) {
+    p2 = `${overText} ${overweight.length === 1 ? 'está' : 'estão'} acima das respectivas metas. `;
+  } else {
+    p2 = 'As demais classes também estão próximas dos percentuais planejados. ';
+  }
+  if (underweight.length) {
+    const priorities = i10JoinPt(underweight.slice(0,2).map(r => `<strong>${escapeHtml(i10ClassLabel(r.classLGV))}</strong>`));
+    p2 += `Os próximos aportes podem priorizar ${priorities}, reduzindo os desvios gradualmente sem necessidade de grandes movimentações ou vendas.`;
+  } else {
+    p2 += 'Não há necessidade de mudanças relevantes neste momento; os próximos aportes podem apenas preservar o equilíbrio atual.';
+  }
+  return `<p>${p1}</p><p>${p2}</p>`;
 }
 
 function renderI10Allocation(data, report) {
@@ -3281,7 +3461,7 @@ function renderI10Allocation(data, report) {
         </div>
       </div>
       <div class="section-title">Leitura da alocação</div>
-      <div class="note-card"><p>${i10AllocationNarrative(rows)}</p></div>
+      <div class="note-card i10-allocation-copy">${i10AllocationNarrative(rows)}</div>
     </div>${renderFooter()}
   </section>`;
 }
@@ -6180,6 +6360,7 @@ document.getElementById('clearData').addEventListener('click', () => {
 
 document.getElementById('periodSelect').addEventListener('change', (e) => {
   state.selectedPeriod = e.target.value;
+  updatePeriodSelectMeta();
   renderReport();
   updateActionPlanControls();
   renderActionPlanPreview();
@@ -6237,6 +6418,10 @@ window.lgvClearReportWorkspaceData = () => {
     periodSelect.innerHTML = '<option value="">Selecione um cliente</option>';
     periodSelect.disabled = true;
   }
+  const periodLabel = document.getElementById('periodSelectLabel');
+  const periodMeta = document.getElementById('periodSelectMeta');
+  if (periodLabel) periodLabel.textContent = 'Mês disponível';
+  if (periodMeta) periodMeta.textContent = '';
   const root = document.getElementById('reportRoot');
   if (root) root.innerHTML = '<div class="empty-state"><h2>Nenhum relatório carregado</h2><p>Selecione um cliente e um mês para emitir.</p></div>';
   document.getElementById('reportToolbar')?.classList.remove('visible');
@@ -6531,6 +6716,150 @@ window.lgvReportSetStatus = setStatus;
     return positionPeriods.at(-1) || '';
   }
 
+  function isInvestidor10Payload(data = {}) {
+    const provider = String(
+      data?.source?.provider || data?.dataSources?.consolidator ||
+      Object.values(data?.reportSnapshots || {})[0]?.source?.provider || ''
+    ).toLowerCase().replace(/\s+/g, '');
+    return provider.includes('investidor10');
+  }
+
+  function previousPeriodToken(period) {
+    const match = String(period || '').match(/^(\d{4})-(\d{2})$/);
+    if (!match) return period || '';
+    let year = Number(match[1]);
+    let month = Number(match[2]) - 1;
+    if (month <= 0) { month = 12; year -= 1; }
+    return `${year}-${String(month).padStart(2,'0')}`;
+  }
+
+  function normalizeFlowType(value) {
+    const v = String(value || '').trim().toLowerCase();
+    if (['aporte','contribution','deposit','entrada','cash_in','cashin'].includes(v)) return 'contribution';
+    if (['resgate','withdrawal','withdraw','saque','saida','saída','cash_out','cashout'].includes(v)) return 'withdrawal';
+    return '';
+  }
+
+  function investidor10AssetLookup(data = {}) {
+    const map = new Map();
+    normalizeAssetRegistry(data.assetRegistry).forEach(asset => {
+      [asset?.assetId, asset?.ticker, asset?.assetName].filter(Boolean).forEach(key => map.set(String(key).toLowerCase(), asset));
+    });
+    return map;
+  }
+
+  function normalizeInvestidor10Flow(row, data = {}) {
+    if (!row || typeof row !== 'object') return null;
+    const type = normalizeFlowType(row.type || row.flowType || row.movementType || row.kind || row.nature);
+    if (!type) return null;
+    const date = String(row.date || row.data || row.paymentDate || row.settlementDate || '').slice(0,10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+    const rawValue = Number(row.value ?? row.amount ?? row.total ?? row.valor);
+    if (!Number.isFinite(rawValue) || rawValue === 0) return null;
+    const value = Math.abs(rawValue);
+    const assetId = row.assetId || row.ticker || row.asset || row.assetName || null;
+    const lookup = investidor10AssetLookup(data);
+    const asset = assetId ? lookup.get(String(assetId).toLowerCase()) : null;
+    const classLGV = row.classLGV || asset?.classLGV || null;
+    const strategicFunction = row.strategicFunction || asset?.strategicFunction || null;
+    const signedValue = type === 'contribution' ? value : -value;
+    const id = String(row.id || row.flowId || [date, type, assetId || 'portfolio', value.toFixed(2)].join('|'));
+    return {
+      id, date, type, value, signedValue,
+      assetId: assetId || null,
+      classLGV,
+      strategicFunction,
+      note: row.note || row.notes || row.observation || row.observacao || null,
+      source: row.source || 'json_investidor10'
+    };
+  }
+
+  function mergeInvestidor10Memory(a = {}, b = {}) {
+    const left = a && typeof a === 'object' ? a : {};
+    const right = b && typeof b === 'object' ? b : {};
+    const snapshots = { ...(left.snapshots || {}), ...(right.snapshots || {}) };
+    const flowMap = new Map();
+    [...(left.externalFlows || []), ...(right.externalFlows || [])].forEach(flow => {
+      if (!flow) return;
+      const key = flow.id || [flow.date, flow.type, flow.assetId || 'portfolio', Number(flow.value || 0).toFixed(2)].join('|');
+      flowMap.set(String(key), { ...(flowMap.get(String(key)) || {}), ...flow, id:String(key) });
+    });
+    return {
+      version: right.version || left.version || '1.0',
+      snapshots,
+      externalFlows: [...flowMap.values()].sort((x,y) => String(x.date || '').localeCompare(String(y.date || '')))
+    };
+  }
+
+  function enrichInvestidor10Import(data = {}, period = '') {
+    if (!isInvestidor10Payload(data)) return data;
+    const copy = clone(data, {}) || {};
+    const importPeriod = normalizePeriodToken(period || getImportPeriod(copy));
+    if (!importPeriod) return copy;
+    copy.reportSnapshots = copy.reportSnapshots || {};
+    const report = copy.reportSnapshots[importPeriod] || {};
+    const partial = !!report.isPartialSnapshot || !!report.investidor10?.isPartialSnapshot || !!report.source?.isPartialSnapshot;
+    const snapshotDate = String(
+      report.positionFinalDate || report.snapshotDate || report.source?.referenceDate || copy.source?.referenceDate || report.periodEnd || `${importPeriod}-01`
+    ).slice(0,10);
+    const analysisPeriod = normalizePeriodToken(report.analysisPeriod || report.analysisMonth || (partial ? previousPeriodToken(importPeriod) : importPeriod));
+    report.analysisPeriod = analysisPeriod;
+    report.snapshotDate = snapshotDate;
+    report.source = { ...(report.source || {}), provider:'Investidor10', referenceDate:snapshotDate };
+    copy.reportSnapshots[importPeriod] = report;
+
+    const available = Array.isArray(copy.availableReports) ? copy.availableReports : [];
+    let found = false;
+    copy.availableReports = available.map(item => {
+      const row = typeof item === 'string' ? { period:item } : { ...(item || {}) };
+      if (normalizePeriodToken(row.period) === importPeriod) {
+        found = true;
+        return { ...row, period:importPeriod, analysisPeriod, snapshotDate, sourceProvider:'Investidor10' };
+      }
+      return row;
+    });
+    if (!found) copy.availableReports.push({ period:importPeriod, analysisPeriod, snapshotDate, sourceProvider:'Investidor10' });
+
+    const positionRows = (copy.positions || []).filter(row => {
+      const rowPeriod = getRowPeriod(row);
+      const rowDate = String(row?.date || row?.positionDate || '').slice(0,10);
+      return rowPeriod === importPeriod || rowDate === snapshotDate;
+    });
+    const summary = report.summary || {};
+    const monthly = (copy.monthlyPerformance || []).find(row => normalizePeriodToken(row?.period || row?.month) === analysisPeriod) || null;
+    const snapshot = {
+      snapshotDate,
+      snapshotPeriod: importPeriod,
+      analysisPeriod,
+      wealth: Number(summary.currentWealthPositionDetail ?? summary.currentWealthMonthlyPerformance),
+      investedValue: Number(summary.investedValue),
+      accumulatedGain: Number(summary.capitalGain),
+      officialMonthlyReturn: Number(monthly?.monthlyReturn ?? monthly?.periodReturn),
+      positions: clone(positionRows, []) || [],
+      allocationByClass: clone(report.allocationByClass, []) || [],
+      motors: clone(report.motors, []) || [],
+      sourceGroupPerformance: clone(report.sourceGroupPerformance, []) || [],
+      sourceReportPeriod: importPeriod
+    };
+    ['wealth','investedValue','accumulatedGain','officialMonthlyReturn'].forEach(key => {
+      if (!Number.isFinite(snapshot[key])) snapshot[key] = null;
+    });
+
+    const explicitFlows = [
+      ...(Array.isArray(copy.externalFlows) ? copy.externalFlows : []),
+      ...(Array.isArray(report.externalFlows) ? report.externalFlows : []),
+      ...(copy.transactions || []).filter(row => normalizeFlowType(row?.type || row?.flowType || row?.movementType || row?.kind || row?.nature))
+    ].map(row => normalizeInvestidor10Flow(row, copy)).filter(Boolean);
+
+    const memory = mergeInvestidor10Memory(copy.investidor10Memory || {}, {
+      version:'1.0',
+      snapshots:{ [snapshotDate]: snapshot },
+      externalFlows:explicitFlows
+    });
+    copy.investidor10Memory = memory;
+    return copy;
+  }
+
   function replacePeriodRows(existingRows = [], incomingRows = [], period, force = false) {
     const existing = Array.isArray(existingRows) ? existingRows : [];
     const incoming = Array.isArray(incomingRows) ? incomingRows : [];
@@ -6672,6 +7001,7 @@ window.lgvReportSetStatus = setStatus;
       ? localData.assetRegistry
       : cloudData.assetRegistry;
     merged.investmentPreferences = { ...(cloudData.investmentPreferences || {}), ...(localData.investmentPreferences || {}) };
+    merged.investidor10Memory = mergeInvestidor10Memory(cloudData.investidor10Memory || {}, localData.investidor10Memory || {});
     merged.reportSnapshots = { ...(cloudData.reportSnapshots || {}), ...(localData.reportSnapshots || {}) };
     merged.actionPlans = { ...(cloudData.actionPlans || {}), ...(localData.actionPlans || {}) };
     merged.reinvestmentCashPolicy = { ...(cloudData.reinvestmentCashPolicy || {}), ...(localData.reinvestmentCashPolicy || {}) };
@@ -7606,8 +7936,9 @@ window.lgvReportSetStatus = setStatus;
 
   async function saveCurrent(reason = 'salvamento manual', silent = false) {
     if (!currentUser) throw new Error('Faça login antes de salvar.');
-    const localData = window.lgvGetCurrentReportData?.();
+    let localData = window.lgvGetCurrentReportData?.();
     if (!localData) throw new Error('Importe ou carregue um relatório antes de salvar.');
+    if (isInvestidor10Payload(localData)) localData = enrichInvestidor10Import(localData, getImportPeriod(localData));
     const inferredId = getClientId(localData);
     if (!selectedClientId) throw new Error('Selecione um cliente antes de salvar o relatório.');
     const clientId = selectedClientId;
@@ -7714,8 +8045,15 @@ window.lgvReportSetStatus = setStatus;
     if (!selectedClientId) throw new Error('Abra primeiro o cadastro do cliente e use Importar atualização JSON.');
     const importedId = imported?.client?.id || imported?.client?.clientId || imported?.clientId || (imported?.client?.name ? slugify(imported.client.name) : '');
     const clientId = selectedClientId;
-    const [clientDoc, existingData] = await Promise.all([getClientRecord(clientId), getClientData(clientId)]);
+    const [clientDoc, existingDataRaw] = await Promise.all([getClientRecord(clientId), getClientData(clientId)]);
     if (!clientDoc) throw new Error('O cliente selecionado não possui cadastro nativo no sistema.');
+    const existingData = isInvestidor10Payload(existingDataRaw || {})
+      ? enrichInvestidor10Import(existingDataRaw, getImportPeriod(existingDataRaw))
+      : existingDataRaw;
+    const preliminaryPeriod = getImportPeriod(imported);
+    const nativeRegistry = normalizeAssetRegistry(clientDoc?.assetRegistry);
+    const importedForEnrichment = nativeRegistry.length ? { ...imported, assetRegistry:nativeRegistry } : imported;
+    imported = enrichInvestidor10Import(importedForEnrichment, preliminaryPeriod);
     const selectedName = clientDoc?.clientProfile?.name || clientDoc?.name || clientId;
     const importedName = imported?.client?.name || imported?.name || importedId || 'cliente não identificado';
     if (importedId && importedId !== clientId) {
