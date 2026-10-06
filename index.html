@@ -1618,6 +1618,224 @@
   }
 </style>
 <link rel="stylesheet" href="./styles/investments.css" />
+<style id="i10-mobile-v48">
+  /* v4.8 - layout mobile nativo para os relatórios Investidor10.
+     O A4 permanece inalterado. */
+  body.pdf-mobile #reportRoot .report-page:not(.i10-cover-page) .report-head {
+    padding: 14px 18px 13px !important;
+    gap: 5px !important;
+  }
+  body.pdf-mobile #reportRoot .report-page:not(.i10-cover-page) .report-head .brand {
+    font-size: 20px !important;
+    line-height: 1 !important;
+  }
+  body.pdf-mobile #reportRoot .report-page:not(.i10-cover-page) .report-head .subtitle,
+  body.pdf-mobile #reportRoot .report-page:not(.i10-cover-page) .report-head .client-meta {
+    font-size: 10.5px !important;
+    line-height: 1.28 !important;
+  }
+  body.pdf-mobile #reportRoot .report-page:not(.i10-cover-page) .report-head .client-meta strong {
+    font-size: 11.5px !important;
+    margin-bottom: 2px !important;
+  }
+  body.pdf-mobile #reportRoot .report-page:not(.i10-cover-page) .report-body {
+    padding: 16px 18px 14px !important;
+  }
+  body.pdf-mobile #reportRoot .report-page:not(.i10-cover-page) .report-footer {
+    padding: 0 18px 16px !important;
+    font-size: 9.5px !important;
+    line-height: 1.32 !important;
+  }
+  body.pdf-mobile #reportRoot .section-title {
+    margin: 14px 0 8px !important;
+    font-size: 13px !important;
+    line-height: 1.15 !important;
+  }
+
+  /* Capa: continua editorial, mas sem altura/padding excessivos no formato vertical. */
+  body.pdf-mobile .i10-cover-page .i10-cover-inner {
+    min-height: 700px !important;
+    padding: 54px 42px !important;
+  }
+  body.pdf-mobile .i10-cover-page .i10-cover-kicker { font-size: 12px !important; }
+  body.pdf-mobile .i10-cover-page .i10-cover-title {
+    font-size: 40px !important;
+    line-height: 1.02 !important;
+    margin: 14px 0 16px !important;
+  }
+  body.pdf-mobile .i10-cover-page .i10-cover-client {
+    font-size: 19px !important;
+    line-height: 1.18 !important;
+  }
+  body.pdf-mobile .i10-cover-page .i10-cover-period { font-size: 13px !important; line-height: 1.4 !important; }
+  body.pdf-mobile .i10-cover-page .i10-cover-snapshot { font-size: 11px !important; }
+  body.pdf-mobile .i10-cover-page .i10-cover-signature {
+    margin-top: 48px !important;
+    font-size: 11px !important;
+  }
+
+  /* Comentário: reduz margem sem comprimir demais a leitura. */
+  body.pdf-mobile .comment-page .comment-card {
+    min-height: 0 !important;
+    padding: 15px 16px !important;
+    border-radius: 16px !important;
+  }
+  body.pdf-mobile .comment-page .manual-preview {
+    font-size: 12px !important;
+    line-height: 1.42 !important;
+    letter-spacing: 0 !important;
+  }
+  body.pdf-mobile .comment-page .manual-preview p { margin: 0 0 10px !important; }
+
+  /* Resumo executivo: quatro cards em 2x2, não quatro cards empilhados. */
+  body.pdf-mobile #i10Executive .grid.two {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 9px !important;
+  }
+  body.pdf-mobile #i10Executive .metric-card {
+    padding: 11px 12px !important;
+    min-width: 0 !important;
+  }
+  body.pdf-mobile #i10Executive .metric-label {
+    font-size: 9px !important;
+    line-height: 1.18 !important;
+    min-height: 2.2em !important;
+  }
+  body.pdf-mobile #i10Executive .metric-value {
+    font-size: 18px !important;
+    line-height: 1.08 !important;
+  }
+  body.pdf-mobile #i10Executive .metric-hint {
+    font-size: 8.6px !important;
+    line-height: 1.25 !important;
+  }
+  body.pdf-mobile #i10Executive .i10-summary-copy {
+    margin-top: 0 !important;
+    padding: 13px 14px !important;
+    font-size: 11px !important;
+    line-height: 1.46 !important;
+  }
+  body.pdf-mobile #i10Executive .i10-summary-copy p { margin: 0 0 8px !important; }
+
+  /* Alocação: gráfico/legenda em uma linha e tabela completa abaixo.
+     Nunca deixa a tabela escapar pela direita. */
+  body.pdf-mobile #i10Allocation .chart-card { padding: 12px !important; }
+  body.pdf-mobile #i10Allocation .i10-allocation-wrap {
+    display: block !important;
+    grid-template-columns: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  body.pdf-mobile #i10Allocation .i10-allocation-wrap > div:first-child {
+    display: grid !important;
+    grid-template-columns: 118px minmax(0, 1fr) !important;
+    gap: 12px !important;
+    align-items: center !important;
+    min-width: 0 !important;
+  }
+  body.pdf-mobile #i10Allocation .i10-donut {
+    width: 108px !important;
+    height: 108px !important;
+    margin: 0 auto !important;
+  }
+  body.pdf-mobile #i10Allocation .i10-donut::after { inset: 26px !important; }
+  body.pdf-mobile #i10Allocation .i10-legend {
+    gap: 5px !important;
+    font-size: 10px !important;
+    min-width: 0 !important;
+  }
+  body.pdf-mobile #i10Allocation .i10-legend-row { gap: 7px !important; }
+  body.pdf-mobile #i10Allocation .i10-legend-label { gap: 6px !important; min-width: 0 !important; }
+  body.pdf-mobile #i10Allocation .i10-legend-swatch { width: 8px !important; height: 8px !important; }
+  body.pdf-mobile #i10Allocation .i10-allocation-wrap > div:last-child {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-top: 11px !important;
+  }
+  body.pdf-mobile #i10Allocation .i10-allocation-table {
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+    font-size: 10px !important;
+  }
+  body.pdf-mobile #i10Allocation .i10-allocation-table th,
+  body.pdf-mobile #i10Allocation .i10-allocation-table td {
+    padding: 7px 6px !important;
+    overflow-wrap: anywhere !important;
+  }
+  body.pdf-mobile #i10Allocation .i10-allocation-table th:first-child,
+  body.pdf-mobile #i10Allocation .i10-allocation-table td:first-child { width: 54% !important; }
+  body.pdf-mobile #i10Allocation .i10-allocation-table th:nth-child(2),
+  body.pdf-mobile #i10Allocation .i10-allocation-table td:nth-child(2) { width: 23% !important; }
+  body.pdf-mobile #i10Allocation .i10-allocation-table th:nth-child(3),
+  body.pdf-mobile #i10Allocation .i10-allocation-table td:nth-child(3) { width: 23% !important; }
+  body.pdf-mobile #i10Allocation .i10-allocation-copy {
+    padding: 13px 14px !important;
+    font-size: 11px !important;
+    line-height: 1.48 !important;
+  }
+  body.pdf-mobile #i10Allocation .i10-allocation-copy p { margin: 0 0 8px !important; }
+
+  /* Ativos: no celular a categoria já é dada pelos separadores de grupo.
+     Esconde a coluna repetitiva "Grupo" e preserva Ativo / Rentabilidade / Valor. */
+  body.pdf-mobile #i10Assets .chart-card {
+    padding: 10px !important;
+    overflow: hidden !important;
+  }
+  body.pdf-mobile #i10Assets .i10-asset-table {
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+    font-size: 9.8px !important;
+  }
+  body.pdf-mobile #i10Assets .i10-asset-table th:nth-child(2),
+  body.pdf-mobile #i10Assets .i10-asset-table td:nth-child(2) {
+    display: none !important;
+  }
+  body.pdf-mobile #i10Assets .i10-asset-table th,
+  body.pdf-mobile #i10Assets .i10-asset-table td {
+    padding: 7px 5px !important;
+    line-height: 1.22 !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
+  }
+  body.pdf-mobile #i10Assets .i10-asset-table th:first-child,
+  body.pdf-mobile #i10Assets .i10-asset-table td:first-child { width: 46% !important; }
+  body.pdf-mobile #i10Assets .i10-asset-table th:nth-child(3),
+  body.pdf-mobile #i10Assets .i10-asset-table td:nth-child(3) { width: 23% !important; }
+  body.pdf-mobile #i10Assets .i10-asset-table th:nth-child(4),
+  body.pdf-mobile #i10Assets .i10-asset-table td:nth-child(4) {
+    width: 31% !important;
+    white-space: nowrap !important;
+    font-size: 9.2px !important;
+  }
+  body.pdf-mobile #i10Assets .i10-group-row td {
+    display: table-cell !important;
+    width: auto !important;
+    padding: 7px 6px !important;
+    font-size: 9px !important;
+  }
+  body.pdf-mobile #i10Assets .i10-summary-lines { gap: 6px !important; margin-top: 8px !important; }
+  body.pdf-mobile #i10Assets .i10-summary-line {
+    padding: 8px 10px !important;
+    gap: 10px !important;
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+  }
+  body.pdf-mobile #i10Assets .i10-summary-line strong {
+    font-size: 10.5px !important;
+    white-space: nowrap !important;
+  }
+  body.pdf-mobile #i10Assets .chart-subtitle { font-size: 9px !important; line-height: 1.35 !important; }
+
+  /* Captura direta mobile: garante que os ajustes acima prevaleçam no html2canvas. */
+  body.generating-direct-pdf.pdf-mobile #i10Allocation .i10-allocation-wrap,
+  body.generating-direct-pdf.pdf-mobile #i10Assets .i10-asset-table,
+  body.generating-direct-pdf.pdf-mobile #i10Executive .grid.two {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+</style>
 </head>
 <body class="auth-pending">
   <section class="login-screen" id="loginScreen">
