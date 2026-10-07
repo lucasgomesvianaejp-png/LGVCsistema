@@ -2342,8 +2342,9 @@ const state = {
 
 const CLASS_LABELS = {
   renda_fixa: 'Renda fixa',
-  ativos_internacionais: 'Ativos internacionais',
   acoes: 'Ações',
+  imoveis: 'Imóveis',
+  ativos_internacionais: 'Ativos internacionais',
   reserva_valor: 'Reserva de valor',
   cripto: 'Criptomoedas'
 };
@@ -3174,12 +3175,14 @@ async function refreshMarketRates() {
     });
     const cdi = accumulateRates(cdiPeriod);
     const cdiStart = accumulateRates(cdiAll);
-    state.market.cdi[marketPeriodKey] = { value: cdi, records: cdiPeriod.length };
+    state.market.cdi[marketPeriodKey] = { value: cdi, records: cdiPeriod.length, start, end };
     state.market.cdiSeries[state.selectedPeriod] = cdiAll;
     state.market.cdiSeries[marketPeriodKey] = cdiAll;
     state.market.cdiFromStart[marketPeriodKey] = { value: cdiStart, records: cdiAll.length };
     report.summary.cdiReturn = cdi;
     report.summary.cdiReferencePeriod = marketPeriodKey;
+    report.summary.cdiPeriodStart = start;
+    report.summary.cdiPeriodEnd = end;
     const portfolioMonthReturn = getOfficialMonthlyReturn(state.data, report);
     report.summary.portfolioVsCDI = cdi && Number.isFinite(portfolioMonthReturn) ? portfolioMonthReturn / cdi : null;
     cdiPill.className = 'pill ok';
@@ -3526,43 +3529,113 @@ function i10AnalysisContext(data, report) {
   const partial = !!report?.isPartialSnapshot || !!report?.investidor10?.isPartialSnapshot;
   const snapshotPeriod = String(report?.period || state.selectedPeriod || report?.positionFinalDate?.slice?.(0,7) || '');
   const analysisPeriod = String(report?.analysisPeriod || (partial ? i10PreviousPeriod(snapshotPeriod) : snapshotPeriod));
-  const periodStart = analysisPeriod ? `${analysisPeriod}-01` : report?.periodStart;
-  const periodEnd = analysisPeriod ? monthEndIso(`${analysisPeriod}-01`) : report?.periodEnd;
   const monthly = (data?.monthlyPerformance || []).find(r => String(r?.period || r?.month || '').slice(0,7) === analysisPeriod) || null;
+  const analysis = report?.analysis || {};
+  const tracking = report?.investidor10?.firstTrackingPeriod;
+  const firstTrackingPeriod = !!analysis?.firstTrackingPeriod || !!report?.investidor10?.firstTrackingPeriod || !!monthly?.isInitialPartialPeriod;
+
+  const defaultStart = analysisPeriod ? `${analysisPeriod}-01` : report?.periodStart;
+  const defaultEnd = analysisPeriod ? monthEndIso(`${analysisPeriod}-01`) : report?.periodEnd;
+  const periodStart = String(
+    analysis?.coverageStart ||
+    report?.analysisStartDate ||
+    monthly?.coverageStart ||
+    (tracking && typeof tracking === 'object' ? tracking.startDate : '') ||
+    defaultStart || ''
+  ).slice(0,10);
+  const periodEnd = String(
+    analysis?.coverageEnd ||
+    report?.analysisEndDate ||
+    monthly?.coverageEnd ||
+    (tracking && typeof tracking === 'object' ? tracking.endDate : '') ||
+    defaultEnd || ''
+  ).slice(0,10);
+
   const history = Array.isArray(report?.investidor10?.equityHistory) ? report.investidor10.equityHistory : [];
   const close = history.find(r => String(r?.period || '').slice(0,7) === analysisPeriod) || null;
   const previousPeriod = i10PreviousPeriod(analysisPeriod);
   const previous = history.find(r => String(r?.period || '').slice(0,7) === previousPeriod) || null;
   const summary = report?.summary || {};
-  const closingWealth = finiteNumber(close?.wealth ?? (partial ? null : summary.currentWealthPositionDetail));
-  const investedValue = finiteNumber(close?.investedValue ?? summary.investedValue);
-  const accumulatedGain = finiteNumber(close?.capitalGain ?? (partial ? null : summary.capitalGain));
+
+  const closingWealth = finiteNumber(analysis?.closingWealth, close?.wealth, partial ? null : summary.currentWealthPositionDetail);
+  const investedValue = finiteNumber(analysis?.closingInvestedValue, close?.investedValue, summary.investedValue);
+  const accumulatedGain = finiteNumber(analysis?.closingCapitalGain, close?.capitalGain, partial ? null : summary.capitalGain);
   const previousGain = finiteNumber(previous?.capitalGain);
   const derivedCycle = i10SnapshotCyclePerformance(data, report);
-  let monthlyGain = accumulatedGain !== null && previousGain !== null ? accumulatedGain - previousGain : null;
-  if (monthlyGain === null && derivedCycle?.portfolio?.result !== null && derivedCycle?.portfolio?.result !== undefined) monthlyGain = derivedCycle.portfolio.result;
-  const previousWealth = finiteNumber(previous?.wealth ?? derivedCycle?.previous?.wealth);
+
+  let positionResult = finiteNumber(analysis?.capitalGainInMonth);
+  if (positionResult === null && accumulatedGain !== null && previousGain !== null) positionResult = accumulatedGain - previousGain;
+  if (positionResult === null && firstTrackingPeriod && accumulatedGain !== null) positionResult = accumulatedGain;
+  if (positionResult === null && derivedCycle?.portfolio?.result !== null && derivedCycle?.portfolio?.result !== undefined) {
+    positionResult = derivedCycle.portfolio.result;
+  }
+
+  let dividendsReceivedInPeriod = finiteNumber(analysis?.dividendsReceivedInPeriod, close?.dividendsReceived);
+  if (dividendsReceivedInPeriod === null && Array.isArray(data?.income?.items) && periodStart && periodEnd) {
+    dividendsReceivedInPeriod = data.income.items.reduce((sum, item) => {
+      const status = String(item?.status || '').toLowerCase();
+      const date = String(item?.paymentDate || item?.date || '').slice(0,10);
+      const value = finiteNumber(item?.netValue, item?.grossValue, item?.value);
+      if (status === 'pago' && date >= periodStart && date <= periodEnd && value !== null) return sum + value;
+      return sum;
+    }, 0);
+  }
+
+  const totalPeriodResult = finiteNumber(
+    analysis?.resultIncludingReceivedIncome,
+    positionResult !== null ? positionResult + (dividendsReceivedInPeriod || 0) : null
+  );
+
+  const previousWealth = finiteNumber(previous?.wealth, derivedCycle?.previous?.wealth);
   const wealthChange = closingWealth !== null && previousWealth !== null ? closingWealth - previousWealth : null;
-  const officialMonthlyReturn = finiteNumber(monthly?.monthlyReturn ?? monthly?.periodReturn ?? (!partial ? summary.periodReturnOfficial : null));
+  const officialMonthlyReturn = finiteNumber(monthly?.monthlyReturn, monthly?.periodReturn, !partial ? summary.periodReturnOfficial : null);
   const derivedMonthlyReturn = finiteNumber(derivedCycle?.portfolio?.return);
   const monthlyReturn = officialMonthlyReturn !== null ? officialMonthlyReturn : derivedMonthlyReturn;
   const monthlyReturnSource = officialMonthlyReturn !== null ? 'official_source' : (derivedMonthlyReturn !== null ? 'lgv_snapshot_modified_dietz' : 'unavailable');
+
+  const snapshotDate = String(report?.positionFinalDate || report?.snapshotDate || report?.periodEnd || '').slice(0,10);
+  const currentWealth = finiteNumber(summary?.currentWealthPositionDetail, summary?.currentWealthMonthlyPerformance);
+  const currentCapitalGain = finiteNumber(summary?.capitalGain);
+  const currentDividends = finiteNumber(summary?.dividendsReceived, data?.income?.receivedTotal);
+  const currentTotalProfit = finiteNumber(
+    summary?.totalProfit,
+    currentCapitalGain !== null ? currentCapitalGain + (currentDividends || 0) : null
+  );
+  const currentMonthly = (data?.monthlyPerformance || []).find(r => String(r?.period || '').slice(0,7) === snapshotPeriod) || null;
+  const currentPeriodReturn = finiteNumber(currentMonthly?.monthlyReturn, currentMonthly?.periodReturn, summary?.periodReturnOfficial);
+  const hasLaterSnapshot = !!(snapshotDate && periodEnd && snapshotDate > periodEnd);
+
   return {
     partial, snapshotPeriod, analysisPeriod, previousPeriod, periodStart, periodEnd, monthly, close, previous, derivedCycle,
-    closingWealth, investedValue, accumulatedGain, monthlyGain, previousWealth, wealthChange, monthlyReturn, monthlyReturnSource
+    firstTrackingPeriod, closingWealth, investedValue, accumulatedGain,
+    monthlyGain: positionResult, positionResult, dividendsReceivedInPeriod, totalPeriodResult,
+    previousWealth, wealthChange, monthlyReturn, monthlyReturnSource,
+    snapshotDate, currentWealth, currentCapitalGain, currentDividends, currentTotalProfit, currentPeriodReturn, hasLaterSnapshot
   };
 }
 
 function i10CdiForAnalysisPeriod(data, report, ctx = i10AnalysisContext(data, report)) {
-  const direct = finiteNumber(state.market?.cdi?.[ctx.analysisPeriod]?.value);
-  if (direct !== null) return direct;
+  const isFullCalendarMonth = ctx.periodStart === `${ctx.analysisPeriod}-01` && ctx.periodEnd === monthEndIso(`${ctx.analysisPeriod}-01`);
+  const directObj = state.market?.cdi?.[ctx.analysisPeriod];
+  const direct = finiteNumber(directObj?.value);
+  if (direct !== null) {
+    const aligned = directObj?.start === ctx.periodStart && directObj?.end === ctx.periodEnd;
+    if (aligned || (isFullCalendarMonth && !directObj?.start && !directObj?.end)) return direct;
+  }
+
   const stored = finiteNumber(report?.summary?.cdiReturn);
-  if (stored !== null && report?.summary?.cdiReferencePeriod === ctx.analysisPeriod) return stored;
+  if (stored !== null && report?.summary?.cdiReferencePeriod === ctx.analysisPeriod) {
+    const aligned = report?.summary?.cdiPeriodStart === ctx.periodStart && report?.summary?.cdiPeriodEnd === ctx.periodEnd;
+    if (aligned || (isFullCalendarMonth && !report?.summary?.cdiPeriodStart && !report?.summary?.cdiPeriodEnd)) return stored;
+  }
+
   const series = state.market?.cdiSeries?.[state.selectedPeriod] || state.market?.cdiSeries?.[ctx.analysisPeriod] || [];
-  const rows = series.filter(item => String(isoFromBRDate(item?.data || '')).slice(0,7) === ctx.analysisPeriod);
+  const rows = series.filter(item => {
+    const iso = isoFromBRDate(item?.data || '');
+    return iso >= ctx.periodStart && iso <= ctx.periodEnd;
+  });
   return rows.length ? accumulateRates(rows) : null;
 }
-
 
 function ensureI10CdiLoaded(data, report) {
   const ctx = i10AnalysisContext(data, report);
@@ -3596,6 +3669,21 @@ function i10ClientFeeAnnualPct(data) {
   return Number.isFinite(n) && n >= 0 ? n : 0.8;
 }
 
+function i10FeeEstimate(data, report, ctx = i10AnalysisContext(data, report)) {
+  const annualPct = i10ClientFeeAnnualPct(data);
+  if (ctx.closingWealth === null) return { value:null, annualPct, proRata:false, coverageDays:null, monthDays:null, ratio:1 };
+  const monthlyBase = ctx.closingWealth * annualPct / 100 / 12;
+  const monthStart = `${ctx.analysisPeriod}-01`;
+  const monthEnd = monthEndIso(monthStart);
+  const monthDays = daysBetweenExact(monthStart, monthEnd) + 1;
+  const start = ctx.periodStart && ctx.periodStart > monthStart ? ctx.periodStart : monthStart;
+  const end = ctx.periodEnd && ctx.periodEnd < monthEnd ? ctx.periodEnd : monthEnd;
+  const coverageDays = daysBetweenExact(start, end) + 1;
+  const proRata = start !== monthStart || end !== monthEnd;
+  const ratio = proRata ? Math.max(0, Math.min(1, coverageDays / monthDays)) : 1;
+  return { value: monthlyBase * ratio, annualPct, proRata, coverageDays, monthDays, ratio };
+}
+
 function i10ClassLabel(key) {
   return CLASS_LABELS[key] || key || '—';
 }
@@ -3620,16 +3708,30 @@ function i10ExecutiveNarrative(data, report) {
   const ctx = i10AnalysisContext(data, report);
   const cdi = i10CdiForAnalysisPeriod(data, report, ctx);
   const vsCdi = ctx.monthlyReturn !== null && cdi !== null ? ctx.monthlyReturn - cdi : null;
-  const feePct = i10ClientFeeAnnualPct(data);
-  const fee = ctx.closingWealth === null ? null : ctx.closingWealth * feePct / 100 / 12;
+  const fee = i10FeeEstimate(data, report, ctx);
   const snapshotDate = fmt.date(report.positionFinalDate || report.periodEnd);
-  let first = `<p>Em <strong>${fmt.month(ctx.analysisPeriod)}</strong>, a carteira apresentou rentabilidade oficial de <strong>${ctx.monthlyReturn === null ? '—' : fmt.pct(ctx.monthlyReturn)}</strong>`;
-  if (cdi !== null) first += `, enquanto o CDI do período ficou em <strong>${fmt.pct(cdi)}</strong>`;
+
+  const periodPhrase = ctx.firstTrackingPeriod
+    ? `de <strong>${fmt.date(ctx.periodStart)}</strong> a <strong>${fmt.date(ctx.periodEnd)}</strong>`
+    : `em <strong>${fmt.month(ctx.analysisPeriod)}</strong>`;
+
+  let first = `<p>${ctx.firstTrackingPeriod ? 'Neste primeiro período de acompanhamento' : 'No período analisado'}, ${periodPhrase}, a carteira apresentou rentabilidade oficial de <strong>${ctx.monthlyReturn === null ? '—' : fmt.pct(ctx.monthlyReturn)}</strong>`;
+  if (cdi !== null) first += `, enquanto o CDI do mesmo intervalo ficou em <strong>${fmt.pct(cdi)}</strong>`;
   if (vsCdi !== null) first += `. A diferença foi de <strong>${fmt.pp(vsCdi)}</strong>`;
   first += '.</p>';
-  const second = `<p>O patrimônio fechou o mês em <strong>${ctx.closingWealth === null ? '—' : fmt.brl(ctx.closingWealth)}</strong>${ctx.monthlyGain === null ? '' : `, com resultado de <strong>${fmt.brl(ctx.monthlyGain)}</strong> no mês`}${ctx.accumulatedGain === null ? '' : ` e ganho total acumulado de <strong>${fmt.brl(ctx.accumulatedGain)}</strong>`}. ${ctx.previousWealth === null ? '' : `No fechamento anterior, o patrimônio era de <strong>${fmt.brl(ctx.previousWealth)}</strong>.`}</p>`;
-  const third = `<p>A distribuição exibida nas páginas seguintes usa a posição mais recente disponível, capturada em <strong>${snapshotDate}</strong>. Isso permite analisar o mês fechado sem perder a fotografia atual da carteira para os próximos ajustes.</p>`;
-  const fourth = `<p>Considerando a taxa cadastrada de <strong>${feePct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a.</strong>, os honorários estimados sobre o patrimônio de fechamento são de <strong>${fee === null ? '—' : fmt.brl(fee)}</strong>.</p>`;
+
+  let second = `<p>O patrimônio fechou o período em <strong>${ctx.closingWealth === null ? '—' : fmt.brl(ctx.closingWealth)}</strong>`;
+  if (ctx.positionResult !== null) second += `, com valorização das posições de <strong>${fmt.brl(ctx.positionResult)}</strong>`;
+  if (ctx.dividendsReceivedInPeriod !== null && ctx.dividendsReceivedInPeriod !== 0) second += ` e <strong>${fmt.brl(ctx.dividendsReceivedInPeriod)}</strong> em proventos recebidos`;
+  if (ctx.totalPeriodResult !== null) second += `. O resultado total do período foi de <strong>${fmt.brl(ctx.totalPeriodResult)}</strong>`;
+  second += '.</p>';
+
+  const third = ctx.hasLaterSnapshot
+    ? `<p>A distribuição e os ativos exibidos nas páginas seguintes usam a fotografia mais recente disponível, capturada em <strong>${snapshotDate}</strong>. Essa posição é posterior ao fechamento analisado e é mostrada separadamente para apresentar a situação atual da carteira.</p>`
+    : `<p>A distribuição exibida nas páginas seguintes corresponde à posição de <strong>${snapshotDate}</strong>.</p>`;
+
+  const feeHint = fee.proRata ? `, calculados pró-rata por <strong>${fee.coverageDays}/${fee.monthDays} dias</strong>` : '';
+  const fourth = `<p>Considerando a taxa cadastrada de <strong>${fee.annualPct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a.</strong>, os honorários estimados sobre o patrimônio de fechamento são de <strong>${fee.value === null ? '—' : fmt.brl(fee.value)}</strong>${feeHint}.</p>`;
   return first + second + third + fourth;
 }
 
@@ -3637,30 +3739,36 @@ function renderI10ExecutiveSummary(data, report) {
   const ctx = i10AnalysisContext(data, report);
   const cdi = i10CdiForAnalysisPeriod(data, report, ctx);
   const benchmarkDiff = ctx.monthlyReturn !== null && cdi !== null ? ctx.monthlyReturn - cdi : null;
-  const feePct = i10ClientFeeAnnualPct(data);
-  const fee = ctx.closingWealth === null ? null : ctx.closingWealth * feePct / 100 / 12;
-  const secondLabel = benchmarkDiff !== null ? `vs. CDI (${fmt.pct(cdi)})` : 'Resultado no mês';
-  const secondValue = benchmarkDiff !== null ? fmt.pp(benchmarkDiff) : (ctx.monthlyGain === null ? '—' : fmt.brl(ctx.monthlyGain));
-  const secondHint = benchmarkDiff !== null ? (benchmarkDiff >= 0 ? 'Acima do benchmark' : 'Abaixo do benchmark') : 'Resultado líquido de aportes e resgates informados';
+  const fee = i10FeeEstimate(data, report, ctx);
+  const secondLabel = benchmarkDiff !== null ? `vs. CDI (${fmt.pct(cdi)})` : 'Resultado no período';
+  const secondValue = benchmarkDiff !== null ? fmt.pp(benchmarkDiff) : (ctx.totalPeriodResult === null ? '—' : fmt.brl(ctx.totalPeriodResult));
+  const secondHint = benchmarkDiff !== null
+    ? (benchmarkDiff >= 0 ? 'Acima do benchmark' : 'Abaixo do benchmark')
+    : 'Valorização das posições + proventos recebidos';
   const performanceHint = ctx.monthlyReturnSource === 'lgv_snapshot_modified_dietz'
     ? `Estimativa LGV entre snapshots (${fmt.date(ctx.derivedCycle?.previous?.snapshotDate)} a ${fmt.date(ctx.derivedCycle?.current?.snapshotDate)})`
-    : 'Performance oficial do mês fechado';
+    : (ctx.firstTrackingPeriod
+      ? `Primeiro período: ${fmt.date(ctx.periodStart)} a ${fmt.date(ctx.periodEnd)} · fonte Investidor10`
+      : 'Performance oficial do mês fechado');
+  const feeHint = fee.proRata
+    ? `${fee.annualPct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a. · pró-rata ${fee.coverageDays}/${fee.monthDays} dias`
+    : `${fee.annualPct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a. · estimativa mensal`;
+
   return `
   <section class="report-page" id="i10Executive">
     ${renderHead('Resumo executivo', data, report)}
     <div class="report-body">
       <div class="grid two">
         <div class="metric-card"><div class="metric-label">Rentabilidade · ${escapeHtml(fmt.month(ctx.analysisPeriod))}</div><div class="metric-value ${ctx.monthlyReturn !== null && ctx.monthlyReturn >= 0 ? 'value-positive' : ''}">${ctx.monthlyReturn === null ? '—' : fmt.pct(ctx.monthlyReturn)}</div><div class="metric-hint">${escapeHtml(performanceHint)}</div></div>
-        <div class="metric-card"><div class="metric-label">${escapeHtml(secondLabel)}</div><div class="metric-value ${benchmarkDiff !== null ? (benchmarkDiff >= 0 ? 'value-positive' : 'value-negative') : (ctx.monthlyGain !== null && ctx.monthlyGain >= 0 ? 'value-positive' : '')}">${secondValue}</div><div class="metric-hint">${escapeHtml(secondHint)}</div></div>
-        <div class="metric-card"><div class="metric-label">Patrimônio no fechamento</div><div class="metric-value">${ctx.closingWealth === null ? '—' : fmt.brl(ctx.closingWealth)}</div><div class="metric-hint">Fechamento de ${escapeHtml(fmt.month(ctx.analysisPeriod))}</div></div>
-        <div class="metric-card"><div class="metric-label">Honorários LGV</div><div class="metric-value">${fee === null ? '—' : fmt.brl(fee)}</div><div class="metric-hint">${feePct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a. · estimativa mensal</div></div>
+        <div class="metric-card"><div class="metric-label">${escapeHtml(secondLabel)}</div><div class="metric-value ${benchmarkDiff !== null ? (benchmarkDiff >= 0 ? 'value-positive' : 'value-negative') : (ctx.totalPeriodResult !== null && ctx.totalPeriodResult >= 0 ? 'value-positive' : '')}">${secondValue}</div><div class="metric-hint">${escapeHtml(secondHint)}</div></div>
+        <div class="metric-card"><div class="metric-label">Patrimônio no fechamento</div><div class="metric-value">${ctx.closingWealth === null ? '—' : fmt.brl(ctx.closingWealth)}</div><div class="metric-hint">${ctx.firstTrackingPeriod ? `${fmt.date(ctx.periodStart)} a ${fmt.date(ctx.periodEnd)}` : `Fechamento de ${fmt.month(ctx.analysisPeriod)}`}</div></div>
+        <div class="metric-card"><div class="metric-label">Honorários LGV</div><div class="metric-value">${fee.value === null ? '—' : fmt.brl(fee.value)}</div><div class="metric-hint">${escapeHtml(feeHint)}</div></div>
       </div>
       <div class="section-title">Análise de performance</div>
       <div class="chart-card i10-summary-copy">${i10ExecutiveNarrative(data, report)}</div>
     </div>${renderFooter()}
   </section>`;
 }
-
 
 function i10BenchmarkData(data, report) {
   const ctx = i10AnalysisContext(data, report);
@@ -3674,22 +3782,29 @@ function i10BenchmarkData(data, report) {
   const portfolioPts = [];
   const cdiPts = [];
   const rows = [];
+
   monthlyRows.forEach(row => {
     const pReturn = finiteNumber(row.monthlyReturn, row.return);
     const monthStart = `${row.period}-01`;
     const monthEnd = monthEndIso(monthStart);
+    const rowStart = String(row.coverageStart || (row.period === ctx.analysisPeriod ? ctx.periodStart : '') || monthStart).slice(0,10);
+    const rowEnd = String(row.coverageEnd || row.periodEnd || (row.period === ctx.analysisPeriod ? ctx.periodEnd : '') || monthEnd).slice(0,10);
+    const effectiveStart = rowStart < monthStart ? monthStart : rowStart;
+    const effectiveEnd = rowEnd > monthEnd ? monthEnd : rowEnd;
+
     const dailyCdi = cdiSeries.filter(item => {
       const iso = isoFromBRDate(item?.data || '');
-      return iso >= monthStart && iso <= monthEnd;
+      return iso >= effectiveStart && iso <= effectiveEnd;
     });
     const cdiReturn = dailyCdi.length ? accumulateRates(dailyCdi) : null;
     if (pReturn !== null) portfolioFactor *= (1 + pReturn);
     if (cdiReturn !== null) cdiFactor *= (1 + cdiReturn);
-    const date = monthEnd;
+    const date = effectiveEnd;
     portfolioPts.push({ date, value: portfolioFactor - 1 });
     if (cdiReturn !== null) cdiPts.push({ date, value: cdiFactor - 1 });
-    rows.push({ period: row.period, portfolioReturn: pReturn, cdiReturn, sourceRevisionDate: row.sourceRevisionDate || null });
+    rows.push({ period:row.period, portfolioReturn:pReturn, cdiReturn, coverageStart:effectiveStart, coverageEnd:effectiveEnd, sourceRevisionDate:row.sourceRevisionDate || null });
   });
+
   const current = rows.find(row => row.period === ctx.analysisPeriod) || null;
   return {
     ctx, rows, current, portfolioPts, cdiPts,
@@ -3705,22 +3820,24 @@ function renderI10BenchmarkPage(data, report) {
   const diff = monthlyReturn !== null && cdi !== null ? monthlyReturn - cdi : null;
   const pctCdi = monthlyReturn !== null && cdi !== null && Math.abs(cdi) > 1e-12 ? monthlyReturn / cdi : null;
   const revision = b.current?.sourceRevisionDate ? ` · série revisada em ${fmt.date(String(b.current.sourceRevisionDate).slice(0,10))}` : '';
+  const periodWord = b.ctx.firstTrackingPeriod ? 'período' : 'mês';
+  const periodHint = b.ctx.firstTrackingPeriod ? `${fmt.date(b.ctx.periodStart)} a ${fmt.date(b.ctx.periodEnd)}` : `Competência ${fmt.month(b.ctx.analysisPeriod)}`;
+
   return `
   <section class="report-page" id="i10Benchmark">
     ${renderHead('Carteira x CDI', data, report)}
     <div class="report-body">
       <div class="i10-benchmark-grid">
-        <div class="metric-card"><div class="metric-label">Carteira no mês</div><div class="metric-value ${monthlyReturn !== null && monthlyReturn >= 0 ? 'value-positive' : 'value-negative'}">${monthlyReturn === null ? '—' : fmt.pct(monthlyReturn)}</div><div class="metric-hint">Rentabilidade mais recente da série Investidor10</div></div>
-        <div class="metric-card"><div class="metric-label">CDI no mês</div><div class="metric-value">${cdi === null ? '—' : fmt.pct(cdi)}</div><div class="metric-hint">BCB · SGS 12 · composição diária</div></div>
+        <div class="metric-card"><div class="metric-label">Carteira no ${periodWord}</div><div class="metric-value ${monthlyReturn !== null && monthlyReturn >= 0 ? 'value-positive' : 'value-negative'}">${monthlyReturn === null ? '—' : fmt.pct(monthlyReturn)}</div><div class="metric-hint">${escapeHtml(periodHint)} · Investidor10</div></div>
+        <div class="metric-card"><div class="metric-label">CDI no ${periodWord}</div><div class="metric-value">${cdi === null ? '—' : fmt.pct(cdi)}</div><div class="metric-hint">Mesmo intervalo · BCB · SGS 12</div></div>
         <div class="metric-card"><div class="metric-label">Diferença</div><div class="metric-value ${diff !== null ? (diff >= 0 ? 'value-positive' : 'value-negative') : ''}">${diff === null ? '—' : fmt.pp(diff)}</div><div class="metric-hint">Carteira menos CDI</div></div>
         <div class="metric-card"><div class="metric-label">Percentual do CDI</div><div class="metric-value ${pctCdi !== null && pctCdi >= 1 ? 'value-positive' : ''}">${pctCdi === null ? '—' : `${(pctCdi*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%`}</div><div class="metric-hint">Retorno da carteira ÷ CDI</div></div>
       </div>
       <div class="section-title">Evolução acumulada</div>
       <div class="chart-card i10-benchmark-chart-card">
         <svg id="i10BenchmarkChart" class="chart i10-benchmark-chart" viewBox="0 0 740 270" preserveAspectRatio="xMidYMid meet"></svg>
-        <div class="chart-subtitle">Série mensal da carteira comparada ao CDI desde o primeiro mês disponível${escapeHtml(revision)}.</div>
+        <div class="chart-subtitle">Série da carteira comparada ao CDI desde o primeiro período disponível${escapeHtml(revision)}.</div>
       </div>
-
     </div>${renderFooter()}
   </section>`;
 }
@@ -3819,6 +3936,19 @@ function i10AllocationNarrative(rows) {
   return `<p>${p1}</p><p>${p2}</p>`;
 }
 
+function i10CanonicalClassKey(value) {
+  const raw = String(value || '').trim();
+  const key = normalizeAssetKey(raw);
+  if (!key) return '';
+  if (['rendafixa','rf','fixedincome'].includes(key)) return 'renda_fixa';
+  if (['acoes','acao','equities','stocks','bolsa'].includes(key)) return 'acoes';
+  if (key.includes('imoveis') || key.includes('imobili') || ['fii','fiis','fundosimobiliarios','realestate'].includes(key)) return 'imoveis';
+  if (key.includes('internacional') || key.includes('exterior') || key.includes('global')) return 'ativos_internacionais';
+  if (key.includes('reservadevalor') || key === 'ouro' || key === 'gold') return 'reserva_valor';
+  if (key.includes('cripto') || key === 'bitcoin' || key === 'btc') return 'cripto';
+  return raw;
+}
+
 function i10ResolvedPositionClass(data, position) {
   const registry = Array.isArray(data?.assetRegistry) ? data.assetRegistry : Object.values(data?.assetRegistry || {});
   const keys = [position?.assetId, position?.ticker, position?.assetName].map(normalizeAssetKey).filter(Boolean);
@@ -3826,7 +3956,10 @@ function i10ResolvedPositionClass(data, position) {
     const assetKeys = [asset?.assetId, asset?.ticker, asset?.assetName, asset?.name].map(normalizeAssetKey).filter(Boolean);
     return keys.some(key => assetKeys.includes(key));
   });
-  return String(match?.classLGV || position?.classLGV || '').trim();
+  if (match?.classLGV) return i10CanonicalClassKey(match.classLGV);
+  const sourceClass = normalizeAssetKey(position?.sourceCategory || position?.type || '');
+  if (sourceClass.includes('fii') || sourceClass.includes('fundosimobili')) return 'imoveis';
+  return i10CanonicalClassKey(position?.classLGV || '');
 }
 
 function i10CurrentPositionsForReport(data, report) {
@@ -3846,14 +3979,11 @@ function i10AllocationRowsWithProfileTargets(data, report) {
   const profileTargets = Array.isArray(data?.allocationPolicy?.targets) ? data.allocationPolicy.targets : [];
   const targetMap = new Map();
   profileTargets.forEach(target => {
-    const key = String(target?.classLGV || '').trim();
+    const key = i10CanonicalClassKey(target?.classLGV);
     const weight = finiteNumber(target?.targetWeight);
     if (key && weight !== null) targetMap.set(key, weight);
   });
 
-  // A classe LGV cadastrada no perfil do cliente é a autoridade para a alocação atual.
-  // Isso permite, por exemplo, tratar USDC como ativo internacional mesmo que a fonte
-  // Investidor10 o apresente dentro de Criptomoedas.
   const currentPositions = i10CurrentPositionsForReport(data, report);
   const classTotals = new Map();
   const classCosts = new Map();
@@ -3867,14 +3997,27 @@ function i10AllocationRowsWithProfileTargets(data, report) {
   });
 
   const positionTotal = [...classTotals.values()].reduce((sum, value) => sum + value, 0);
-  const totalWealth = positionTotal > 0
-    ? positionTotal
-    : finiteNumber(report?.summary?.currentWealthPositionDetail, report?.summary?.currentWealthMonthlyPerformance);
-  const snapshotMap = new Map(snapshotRows.map(row => [String(row?.classLGV || '').trim(), row]));
+  const totalWealth = positionTotal > 0 ? positionTotal : finiteNumber(report?.summary?.currentWealthPositionDetail, report?.summary?.currentWealthMonthlyPerformance);
+
+  const snapshotMap = new Map();
+  snapshotRows.forEach(row => {
+    const key = i10CanonicalClassKey(row?.classLGV);
+    if (!key) return;
+    const prev = snapshotMap.get(key) || {};
+    snapshotMap.set(key, {
+      ...prev, ...row, classLGV:key,
+      currentValue:(finiteNumber(prev?.currentValue) || 0) + (finiteNumber(row?.currentValue) || 0)
+    });
+  });
+
+  const preferredOrder = ['renda_fixa','acoes','imoveis','ativos_internacionais','reserva_valor','cripto'];
   const orderedKeys = [];
   const addKey = key => { if (key && !orderedKeys.includes(key)) orderedKeys.push(key); };
-  profileTargets.forEach(row => addKey(String(row?.classLGV || '').trim()));
-  snapshotRows.forEach(row => addKey(String(row?.classLGV || '').trim()));
+  preferredOrder.forEach(key => {
+    if (targetMap.has(key) || snapshotMap.has(key) || classTotals.has(key)) addKey(key);
+  });
+  targetMap.forEach((_, key) => addKey(key));
+  snapshotMap.forEach((_, key) => addKey(key));
   classTotals.forEach((_, key) => addKey(key));
 
   return orderedKeys.map(key => {
@@ -3886,23 +4029,15 @@ function i10AllocationRowsWithProfileTargets(data, report) {
     const targetValue = profileTarget !== null && totalWealth !== null ? totalWealth * profileTarget : finiteNumber(row?.targetValue);
     const displayedCostBasis = classCosts.has(key) ? classCosts.get(key) : finiteNumber(row?.displayedCostBasis);
     const capitalResultOnCost = displayedCostBasis !== null ? currentValue - displayedCostBasis : finiteNumber(row?.capitalResultOnCost);
-    const capitalReturnOnCost = displayedCostBasis !== null && Math.abs(displayedCostBasis) > 1e-9
-      ? capitalResultOnCost / displayedCostBasis
-      : finiteNumber(row?.capitalReturnOnCost);
+    const capitalReturnOnCost = displayedCostBasis !== null && Math.abs(displayedCostBasis) > 1e-9 ? capitalResultOnCost / displayedCostBasis : finiteNumber(row?.capitalReturnOnCost);
     return {
-      ...row,
-      classLGV:key,
-      currentValue,
-      currentWeight,
-      targetWeight: profileTarget,
-      targetValue,
-      differenceWeight: profileTarget !== null ? currentWeight - profileTarget : finiteNumber(row?.differenceWeight),
-      differenceValue: currentValue !== null && targetValue !== null ? currentValue - targetValue : finiteNumber(row?.differenceValue),
-      displayedCostBasis,
-      capitalResultOnCost,
-      capitalReturnOnCost,
-      currentClassSource: classTotals.has(key) ? 'client_asset_registry' : (row?.currentClassSource || 'snapshot'),
-      targetSource: targetMap.has(key) ? 'client_profile' : (row?.targetSource || 'snapshot')
+      ...row, classLGV:key, currentValue, currentWeight,
+      targetWeight:profileTarget, targetValue,
+      differenceWeight:profileTarget !== null ? currentWeight - profileTarget : finiteNumber(row?.differenceWeight),
+      differenceValue:currentValue !== null && targetValue !== null ? currentValue - targetValue : finiteNumber(row?.differenceValue),
+      displayedCostBasis, capitalResultOnCost, capitalReturnOnCost,
+      currentClassSource:classTotals.has(key) ? 'client_asset_registry' : (row?.currentClassSource || 'snapshot'),
+      targetSource:targetMap.has(key) ? 'client_profile' : (row?.targetSource || 'snapshot')
     };
   });
 }
@@ -3930,8 +4065,8 @@ function renderI10Allocation(data, report) {
 }
 
 function i10PositionDisplayValue(p) {
-  const source = finiteNumber(p?.sourceMarketValue);
-  return source === null ? finiteNumber(p?.marketValue) : source;
+  const reconciled = finiteNumber(p?.marketValue);
+  return reconciled === null ? finiteNumber(p?.sourceMarketValue) : reconciled;
 }
 
 function i10AssetAlias(p) {
@@ -3944,51 +4079,79 @@ function i10AssetAlias(p) {
 }
 
 function renderI10AssetPerformance(data, report) {
-  const s = report.summary || {};
-  const sourceGroups = report.sourceGroupPerformance || [];
-  const positions = (data.positions || []).filter(p => p.referencePeriod === state.selectedPeriod || p.date === report.positionFinalDate);
-  const group = label => sourceGroups.find(r => String(r.label||'').toLowerCase() === label.toLowerCase());
-  const byCategory = cat => positions.filter(p => String(p.sourceCategory || p.type || '').toLowerCase() === cat.toLowerCase());
-  const byLgvClass = classLGV => positions.filter(p => i10ResolvedPositionClass(data, p) === classLGV);
-  const treasury = byCategory('Tesouro Direto');
-  const international = byLgvClass('ativos_internacionais');
-  const equities = byLgvClass('acoes');
-  const reserve = byLgvClass('reserva_valor');
-  const crypto = byLgvClass('cripto');
-  const rfGroup = group('Renda Fixa');
+  const positions = i10CurrentPositionsForReport(data, report);
+  const classOrder = ['renda_fixa','imoveis','acoes','ativos_internacionais','reserva_valor','cripto'];
+  const grouped = new Map();
+
+  positions.forEach(p => {
+    const key = i10ResolvedPositionClass(data, p) || 'sem_classe';
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(p);
+  });
+
+  const ordered = [];
+  classOrder.forEach(key => { if (grouped.has(key)) ordered.push(key); });
+  grouped.forEach((_, key) => { if (!ordered.includes(key)) ordered.push(key); });
+
   const rows = [];
-  if (rfGroup) {
-    rows.push(`<tr class="i10-group-row"><td colspan="4">Renda Fixa</td></tr>`);
-    rows.push(`<tr><td>CDB Itaú 100% CDI</td><td>Renda Fixa</td><td class="num ${finiteNumber(rfGroup.snapshotReturn) >= 0 ? 'value-positive' : 'value-negative'}"><strong>${rfGroup.snapshotReturn == null ? '—' : fmt.pct(rfGroup.snapshotReturn)}</strong></td><td class="num">${rfGroup.currentValue == null ? '—' : fmt.brl(rfGroup.currentValue)}</td></tr>`);
-  }
-  if (treasury.length) {
-    rows.push(`<tr class="i10-group-row"><td colspan="4">Tesouro Direto</td></tr>`);
-    treasury.forEach(p => rows.push(`<tr><td>${escapeHtml(i10AssetAlias(p))}</td><td>Tesouro Direto</td><td class="num ${finiteNumber(p.sourceSnapshotReturn) >= 0 ? 'value-positive' : 'value-negative'}"><strong>${p.sourceSnapshotReturn == null ? '—' : fmt.pct(p.sourceSnapshotReturn)}</strong></td><td class="num">${i10PositionDisplayValue(p) == null ? '—' : fmt.brl(i10PositionDisplayValue(p))}</td></tr>`));
-  }
-  const pushClassRows = (label, classLGV, classRows) => {
+  ordered.forEach(key => {
+    const classRows = grouped.get(key) || [];
     if (!classRows.length) return;
-    rows.push(`<tr class="i10-group-row"><td colspan="4">${escapeHtml(label)}</td></tr>`);
-    classRows.forEach(p => rows.push(`<tr><td>${escapeHtml(i10AssetAlias(p))}</td><td>${escapeHtml(label)}</td><td class="num ${finiteNumber(p.sourceSnapshotReturn) >= 0 ? 'value-positive' : 'value-negative'}"><strong>${p.sourceSnapshotReturn == null ? '—' : fmt.pct(p.sourceSnapshotReturn)}</strong></td><td class="num">${i10PositionDisplayValue(p) == null ? '—' : fmt.brl(i10PositionDisplayValue(p))}</td></tr>`));
-  };
-  pushClassRows('Ativos internacionais', 'ativos_internacionais', international);
-  pushClassRows('Ações', 'acoes', equities);
-  pushClassRows('Reserva de valor', 'reserva_valor', reserve);
-  pushClassRows('Criptomoedas', 'cripto', crypto);
+    rows.push(`<tr class="i10-group-row"><td colspan="4">${escapeHtml(i10ClassLabel(key))}</td></tr>`);
+    classRows.forEach(p => {
+      const sourceGroup = String(p?.sourceCategory || p?.type || i10ClassLabel(key) || '').trim();
+      const ret = finiteNumber(p?.sourceSnapshotReturn);
+      const value = i10PositionDisplayValue(p);
+      rows.push(`<tr>
+        <td>${escapeHtml(i10AssetAlias(p))}</td>
+        <td>${escapeHtml(sourceGroup || i10ClassLabel(key))}</td>
+        <td class="num ${ret !== null ? (ret >= 0 ? 'value-positive' : 'value-negative') : ''}"><strong>${ret === null ? '—' : fmt.pct(ret)}</strong></td>
+        <td class="num">${value === null ? '—' : fmt.brl(value)}</td>
+      </tr>`);
+    });
+  });
+
   const ctx = i10AnalysisContext(data, report);
-  const wealth = ctx.closingWealth;
-  const gain = ctx.accumulatedGain;
   return `
   <section class="report-page" id="i10Assets">
     ${renderHead(`Performance dos ativos e perspectivas · posição em ${fmt.date(report.positionFinalDate || report.periodEnd)}`, data, report)}
     <div class="report-body">
       <div class="chart-card"><table class="table i10-asset-table"><thead><tr><th>Ativo</th><th>Grupo</th><th class="num">Rentabilidade da posição</th><th class="num">Valor atual</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
-      <div class="section-title">Resumo consolidado</div>
+      <div class="chart-subtitle" style="margin-top:10px;">A coluna <strong>Rentabilidade da posição</strong> reproduz a rentabilidade exibida pelo Investidor10 no snapshot de ${fmt.date(report.positionFinalDate || report.periodEnd)} e não representa, necessariamente, o retorno de ${escapeHtml(fmt.month(ctx.analysisPeriod))}.</div>
+    </div>${renderFooter()}
+  </section>`;
+}
+
+function renderI10ClosingAndCurrent(data, report) {
+  const ctx = i10AnalysisContext(data, report);
+  const closingTitle = ctx.firstTrackingPeriod
+    ? `Fechamento do primeiro período · ${fmt.date(ctx.periodStart)} a ${fmt.date(ctx.periodEnd)}`
+    : `Fechamento do período analisado · ${fmt.month(ctx.analysisPeriod)}`;
+  const currentReturnLabel = ctx.snapshotDate ? `${fmt.month(ctx.snapshotPeriod)} até ${fmt.date(ctx.snapshotDate)}` : 'Período atual';
+
+  return `
+  <section class="report-page" id="i10ClosingCurrent">
+    ${renderHead('Fechamento e posição atual', data, report)}
+    <div class="report-body">
+      <div class="section-title" style="margin-top:0;">${escapeHtml(closingTitle)}</div>
       <div class="i10-summary-lines">
-        <div class="i10-summary-line"><span>Patrimônio no fechamento de ${escapeHtml(fmt.month(ctx.analysisPeriod))}</span><strong>${wealth === null ? '—' : fmt.brl(wealth)}</strong></div>
-        <div class="i10-summary-line"><span>Resultado no mês</span><strong class="${ctx.monthlyGain !== null && ctx.monthlyGain >= 0 ? 'value-positive' : 'value-negative'}">${ctx.monthlyGain === null ? '—' : fmt.brl(ctx.monthlyGain)}</strong></div>
-        <div class="i10-summary-line"><span>Ganho total acumulado no fechamento</span><strong class="${gain !== null && gain >= 0 ? 'value-positive' : 'value-negative'}">${gain === null ? '—' : fmt.brl(gain)}</strong></div>
+        <div class="i10-summary-line"><span>Patrimônio no fechamento</span><strong>${ctx.closingWealth === null ? '—' : fmt.brl(ctx.closingWealth)}</strong></div>
+        <div class="i10-summary-line"><span>Valorização das posições no período</span><strong class="${ctx.positionResult !== null && ctx.positionResult >= 0 ? 'value-positive' : 'value-negative'}">${ctx.positionResult === null ? '—' : fmt.brl(ctx.positionResult)}</strong></div>
+        <div class="i10-summary-line"><span>Proventos recebidos no período</span><strong class="${ctx.dividendsReceivedInPeriod !== null && ctx.dividendsReceivedInPeriod >= 0 ? 'value-positive' : ''}">${ctx.dividendsReceivedInPeriod === null ? '—' : fmt.brl(ctx.dividendsReceivedInPeriod)}</strong></div>
+        <div class="i10-summary-line"><span>Resultado total do período</span><strong class="${ctx.totalPeriodResult !== null && ctx.totalPeriodResult >= 0 ? 'value-positive' : 'value-negative'}">${ctx.totalPeriodResult === null ? '—' : fmt.brl(ctx.totalPeriodResult)}</strong></div>
       </div>
-      <div class="chart-subtitle" style="margin-top:10px;">A análise mensal acima é de ${escapeHtml(fmt.month(ctx.analysisPeriod))}. A coluna <strong>Rentabilidade da posição</strong> reproduz a rentabilidade exibida pelo Investidor10 no snapshot de ${fmt.date(report.positionFinalDate || report.periodEnd)} e não representa, necessariamente, o retorno de ${escapeHtml(fmt.month(ctx.analysisPeriod))}.</div>
+
+      ${ctx.hasLaterSnapshot ? `
+        <div class="section-title">Posição atual · ${fmt.date(ctx.snapshotDate)}</div>
+        <div class="i10-summary-lines">
+          <div class="i10-summary-line"><span>Patrimônio atual</span><strong>${ctx.currentWealth === null ? '—' : fmt.brl(ctx.currentWealth)}</strong></div>
+          <div class="i10-summary-line"><span>Ganho das posições acumulado</span><strong class="${ctx.currentCapitalGain !== null && ctx.currentCapitalGain >= 0 ? 'value-positive' : 'value-negative'}">${ctx.currentCapitalGain === null ? '—' : fmt.brl(ctx.currentCapitalGain)}</strong></div>
+          <div class="i10-summary-line"><span>Proventos recebidos acumulados</span><strong class="${ctx.currentDividends !== null && ctx.currentDividends >= 0 ? 'value-positive' : ''}">${ctx.currentDividends === null ? '—' : fmt.brl(ctx.currentDividends)}</strong></div>
+          <div class="i10-summary-line"><span>Resultado total acumulado</span><strong class="${ctx.currentTotalProfit !== null && ctx.currentTotalProfit >= 0 ? 'value-positive' : 'value-negative'}">${ctx.currentTotalProfit === null ? '—' : fmt.brl(ctx.currentTotalProfit)}</strong></div>
+          <div class="i10-summary-line"><span>${escapeHtml(currentReturnLabel)}</span><strong class="${ctx.currentPeriodReturn !== null && ctx.currentPeriodReturn >= 0 ? 'value-positive' : 'value-negative'}">${ctx.currentPeriodReturn === null ? '—' : fmt.pct(ctx.currentPeriodReturn)}</strong></div>
+        </div>
+        <div class="chart-subtitle" style="margin-top:12px;">A posição atual é posterior ao período analisado e é apresentada separadamente para mostrar a situação mais recente da carteira, sem alterar os números do fechamento.</div>
+      ` : ''}
     </div>${renderFooter()}
   </section>`;
 }
@@ -4007,7 +4170,9 @@ function renderInvestidor10Report(data, report) {
   const i10Cdi = i10CdiForAnalysisPeriod(data, report, ctx);
   if (cdiPill) {
     cdiPill.className = `pill ${i10Cdi === null ? 'warn' : 'ok'}`;
-    cdiPill.textContent = i10Cdi === null ? 'CDI: carregando...' : `CDI ${fmt.month(ctx.analysisPeriod)}: ${fmt.pct(i10Cdi)}`;
+    cdiPill.textContent = i10Cdi === null
+      ? 'CDI: carregando...'
+      : `CDI ${ctx.firstTrackingPeriod ? `${fmt.date(ctx.periodStart)}–${fmt.date(ctx.periodEnd)}` : fmt.month(ctx.analysisPeriod)}: ${fmt.pct(i10Cdi)}`;
   }
   if (ipcaPill) ipcaPill.textContent = partial ? 'Posição parcial' : 'Período fechado';
   if (reconcilePill) {
@@ -4022,6 +4187,7 @@ function renderInvestidor10Report(data, report) {
   pages.push(renderI10BenchmarkPage(data, report));
   pages.push(renderI10Allocation(data, report));
   pages.push(renderI10AssetPerformance(data, report));
+  pages.push(renderI10ClosingAndCurrent(data, report));
 
   root.innerHTML = pages.join('');
   state.currentData = data;
@@ -5308,6 +5474,7 @@ function splitCommentTextForPages(text, maxUnits = 3200) {
 function renderCommentPages(data, report) {
   const commentPeriod = isInvestidor10Report(data, report) ? i10AnalysisContext(data, report).analysisPeriod : state.selectedPeriod;
   const text = getConsultantCommentText(data, commentPeriod) || getConsultantCommentText(data, state.selectedPeriod);
+  if (!text) return [];
   const chunks = splitCommentTextForPages(text, 3200);
   return chunks.map((chunk, index) => {
     const isFirst = index === 0;
@@ -5320,7 +5487,7 @@ function renderCommentPages(data, report) {
       <div class="report-body page-comment">
         <div class="manual-card comment-card">
           <div class="comment-title">${escapeHtml(cardTitle)}</div>
-          <div class="manual-preview">${text ? escapeHtml(chunk) : '<span class="muted">Comentário não informado no JSON deste relatório.</span>'}</div>
+          <div class="manual-preview">${escapeHtml(chunk)}</div>
           ${!isLast ? '<div class="comment-continuation-note">Continua na próxima página.</div>' : ''}
         </div>
       </div>
@@ -7305,19 +7472,44 @@ window.lgvReportSetStatus = setStatus;
     return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   }
 
+  function moduleCanonicalClassKey(value) {
+    const raw = String(value || '').trim();
+    const key = raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+    if (!key) return '';
+    if (['rendafixa','rf','fixedincome'].includes(key)) return 'renda_fixa';
+    if (['acoes','acao','equities','stocks','bolsa'].includes(key)) return 'acoes';
+    if (key.includes('imoveis') || key.includes('imobili') || ['fii','fiis','fundosimobiliarios','realestate'].includes(key)) return 'imoveis';
+    if (key.includes('internacional') || key.includes('exterior') || key.includes('global')) return 'ativos_internacionais';
+    if (key.includes('reservadevalor') || key === 'ouro' || key === 'gold') return 'reserva_valor';
+    if (key.includes('cripto') || key === 'bitcoin' || key === 'btc') return 'cripto';
+    return raw;
+  }
+
   function moduleResolvedAssetClass(position = {}, registry = []) {
     const keys = [position.assetId, position.ticker, position.assetName].map(moduleAssetKey).filter(Boolean);
     const asset = normalizeAssetRegistry(registry).find(item => {
       const assetKeys = [item?.assetId, item?.ticker, item?.assetName, item?.name].map(moduleAssetKey).filter(Boolean);
       return keys.some(key => assetKeys.includes(key));
     });
-    return String(asset?.classLGV || position?.classLGV || '').trim();
+    if (asset?.classLGV) return moduleCanonicalClassKey(asset.classLGV);
+    const source = String(position?.sourceCategory || position?.type || '').toLowerCase();
+    if (source.includes('fii') || source.includes('imobili')) return 'imoveis';
+    return moduleCanonicalClassKey(position?.classLGV || '');
   }
 
   function rebuildInvestidor10AllocationByClass(report = {}, positions = [], registry = []) {
     if (!positions.length) return clone(report?.allocationByClass, []) || [];
     const existing = Array.isArray(report?.allocationByClass) ? report.allocationByClass : [];
-    const existingMap = new Map(existing.map(row => [String(row?.classLGV || '').trim(), row]));
+    const existingMap = new Map();
+    existing.forEach(row => {
+      const key = moduleCanonicalClassKey(row?.classLGV);
+      if (!key) return;
+      const prev = existingMap.get(key) || {};
+      existingMap.set(key, {
+        ...prev, ...row, classLGV:key,
+        currentValue:(Number(prev?.currentValue) || 0) + (Number(row?.currentValue) || 0)
+      });
+    });
     const totals = new Map();
     const costs = new Map();
     positions.forEach(position => {
@@ -7332,7 +7524,7 @@ window.lgvReportSetStatus = setStatus;
     if (!(total > 0)) return clone(existing, []) || [];
     const keys = [];
     const addKey = key => { if (key && !keys.includes(key)) keys.push(key); };
-    existing.forEach(row => addKey(String(row?.classLGV || '').trim()));
+    existingMap.forEach((_, key) => addKey(key));
     totals.forEach((_, key) => addKey(key));
     return keys.map(key => {
       const old = existingMap.get(key) || { classLGV:key };
