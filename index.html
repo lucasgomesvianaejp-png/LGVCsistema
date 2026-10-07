@@ -3800,8 +3800,30 @@ function i10AllocationNarrative(rows) {
   return `<p>${p1}</p><p>${p2}</p>`;
 }
 
+function i10ResolvedPositionClass(data, position) {
+  const registry = Array.isArray(data?.assetRegistry) ? data.assetRegistry : Object.values(data?.assetRegistry || {});
+  const keys = [position?.assetId, position?.ticker, position?.assetName].map(normalizeAssetKey).filter(Boolean);
+  const match = registry.find(asset => {
+    const assetKeys = [asset?.assetId, asset?.ticker, asset?.assetName, asset?.name].map(normalizeAssetKey).filter(Boolean);
+    return keys.some(key => assetKeys.includes(key));
+  });
+  return String(match?.classLGV || position?.classLGV || '').trim();
+}
+
+function i10CurrentPositionsForReport(data, report) {
+  const positions = Array.isArray(data?.positions) ? data.positions : [];
+  const snapshotDate = String(report?.positionFinalDate || report?.snapshotDate || '').slice(0,10);
+  if (snapshotDate) {
+    const exact = positions.filter(p => String(p?.date || p?.positionDate || '').slice(0,10) === snapshotDate);
+    if (exact.length) return exact;
+  }
+  const snapshotPeriod = String(report?.period || state.selectedPeriod || '').slice(0,7);
+  const byPeriod = positions.filter(p => String(p?.referencePeriod || p?.period || '').slice(0,7) === snapshotPeriod);
+  return byPeriod.length ? byPeriod : positions;
+}
+
 function i10AllocationRowsWithProfileTargets(data, report) {
-  const rows = Array.isArray(report?.allocationByClass) ? report.allocationByClass : [];
+  const snapshotRows = Array.isArray(report?.allocationByClass) ? report.allocationByClass : [];
   const profileTargets = Array.isArray(data?.allocationPolicy?.targets) ? data.allocationPolicy.targets : [];
   const targetMap = new Map();
   profileTargets.forEach(target => {
@@ -3809,19 +3831,58 @@ function i10AllocationRowsWithProfileTargets(data, report) {
     const weight = finiteNumber(target?.targetWeight);
     if (key && weight !== null) targetMap.set(key, weight);
   });
-  return rows.map(row => {
-    const key = String(row?.classLGV || '').trim();
+
+  // A classe LGV cadastrada no perfil do cliente é a autoridade para a alocação atual.
+  // Isso permite, por exemplo, tratar USDC como ativo internacional mesmo que a fonte
+  // Investidor10 o apresente dentro de Criptomoedas.
+  const currentPositions = i10CurrentPositionsForReport(data, report);
+  const classTotals = new Map();
+  const classCosts = new Map();
+  currentPositions.forEach(position => {
+    const key = i10ResolvedPositionClass(data, position);
+    if (!key) return;
+    const value = finiteNumber(position?.marketValue, position?.sourceMarketValue) ?? 0;
+    const cost = finiteNumber(position?.displayedCostBasis, position?.costBasis, position?.investedValue);
+    classTotals.set(key, (classTotals.get(key) || 0) + value);
+    if (cost !== null) classCosts.set(key, (classCosts.get(key) || 0) + cost);
+  });
+
+  const positionTotal = [...classTotals.values()].reduce((sum, value) => sum + value, 0);
+  const totalWealth = positionTotal > 0
+    ? positionTotal
+    : finiteNumber(report?.summary?.currentWealthPositionDetail, report?.summary?.currentWealthMonthlyPerformance);
+  const snapshotMap = new Map(snapshotRows.map(row => [String(row?.classLGV || '').trim(), row]));
+  const orderedKeys = [];
+  const addKey = key => { if (key && !orderedKeys.includes(key)) orderedKeys.push(key); };
+  profileTargets.forEach(row => addKey(String(row?.classLGV || '').trim()));
+  snapshotRows.forEach(row => addKey(String(row?.classLGV || '').trim()));
+  classTotals.forEach((_, key) => addKey(key));
+
+  return orderedKeys.map(key => {
+    const row = snapshotMap.get(key) || { classLGV:key };
     const profileTarget = targetMap.has(key) ? targetMap.get(key) : finiteNumber(row?.targetWeight);
-    const currentWeight = finiteNumber(row?.currentWeight) ?? 0;
-    const currentValue = finiteNumber(row?.currentValue);
-    const totalWealth = finiteNumber(report?.summary?.currentWealthPositionDetail, report?.summary?.currentWealthMonthlyPerformance);
+    const computedValue = classTotals.has(key) ? classTotals.get(key) : finiteNumber(row?.currentValue);
+    const currentValue = computedValue ?? 0;
+    const currentWeight = totalWealth && totalWealth > 0 ? currentValue / totalWealth : (finiteNumber(row?.currentWeight) ?? 0);
     const targetValue = profileTarget !== null && totalWealth !== null ? totalWealth * profileTarget : finiteNumber(row?.targetValue);
+    const displayedCostBasis = classCosts.has(key) ? classCosts.get(key) : finiteNumber(row?.displayedCostBasis);
+    const capitalResultOnCost = displayedCostBasis !== null ? currentValue - displayedCostBasis : finiteNumber(row?.capitalResultOnCost);
+    const capitalReturnOnCost = displayedCostBasis !== null && Math.abs(displayedCostBasis) > 1e-9
+      ? capitalResultOnCost / displayedCostBasis
+      : finiteNumber(row?.capitalReturnOnCost);
     return {
       ...row,
+      classLGV:key,
+      currentValue,
+      currentWeight,
       targetWeight: profileTarget,
       targetValue,
       differenceWeight: profileTarget !== null ? currentWeight - profileTarget : finiteNumber(row?.differenceWeight),
       differenceValue: currentValue !== null && targetValue !== null ? currentValue - targetValue : finiteNumber(row?.differenceValue),
+      displayedCostBasis,
+      capitalResultOnCost,
+      capitalReturnOnCost,
+      currentClassSource: classTotals.has(key) ? 'client_asset_registry' : (row?.currentClassSource || 'snapshot'),
       targetSource: targetMap.has(key) ? 'client_profile' : (row?.targetSource || 'snapshot')
     };
   });
@@ -3869,9 +3930,12 @@ function renderI10AssetPerformance(data, report) {
   const positions = (data.positions || []).filter(p => p.referencePeriod === state.selectedPeriod || p.date === report.positionFinalDate);
   const group = label => sourceGroups.find(r => String(r.label||'').toLowerCase() === label.toLowerCase());
   const byCategory = cat => positions.filter(p => String(p.sourceCategory || p.type || '').toLowerCase() === cat.toLowerCase());
+  const byLgvClass = classLGV => positions.filter(p => i10ResolvedPositionClass(data, p) === classLGV);
   const treasury = byCategory('Tesouro Direto');
-  const etfs = byCategory('ETFs');
-  const crypto = byCategory('Criptomoedas');
+  const international = byLgvClass('ativos_internacionais');
+  const equities = byLgvClass('acoes');
+  const reserve = byLgvClass('reserva_valor');
+  const crypto = byLgvClass('cripto');
   const rfGroup = group('Renda Fixa');
   const rows = [];
   if (rfGroup) {
@@ -3882,14 +3946,15 @@ function renderI10AssetPerformance(data, report) {
     rows.push(`<tr class="i10-group-row"><td colspan="4">Tesouro Direto</td></tr>`);
     treasury.forEach(p => rows.push(`<tr><td>${escapeHtml(i10AssetAlias(p))}</td><td>Tesouro Direto</td><td class="num ${finiteNumber(p.sourceSnapshotReturn) >= 0 ? 'value-positive' : 'value-negative'}"><strong>${p.sourceSnapshotReturn == null ? '—' : fmt.pct(p.sourceSnapshotReturn)}</strong></td><td class="num">${i10PositionDisplayValue(p) == null ? '—' : fmt.brl(i10PositionDisplayValue(p))}</td></tr>`));
   }
-  if (etfs.length) {
-    rows.push(`<tr class="i10-group-row"><td colspan="4">ETFs</td></tr>`);
-    etfs.forEach(p => rows.push(`<tr><td>${escapeHtml(i10AssetAlias(p))}</td><td>ETFs</td><td class="num ${finiteNumber(p.sourceSnapshotReturn) >= 0 ? 'value-positive' : 'value-negative'}"><strong>${p.sourceSnapshotReturn == null ? '—' : fmt.pct(p.sourceSnapshotReturn)}</strong></td><td class="num">${i10PositionDisplayValue(p) == null ? '—' : fmt.brl(i10PositionDisplayValue(p))}</td></tr>`));
-  }
-  if (crypto.length) {
-    rows.push(`<tr class="i10-group-row"><td colspan="4">Criptomoedas</td></tr>`);
-    crypto.forEach(p => rows.push(`<tr><td>${escapeHtml(i10AssetAlias(p))}</td><td>Criptomoedas</td><td class="num ${finiteNumber(p.sourceSnapshotReturn) >= 0 ? 'value-positive' : 'value-negative'}"><strong>${p.sourceSnapshotReturn == null ? '—' : fmt.pct(p.sourceSnapshotReturn)}</strong></td><td class="num">${i10PositionDisplayValue(p) == null ? '—' : fmt.brl(i10PositionDisplayValue(p))}</td></tr>`));
-  }
+  const pushClassRows = (label, classLGV, classRows) => {
+    if (!classRows.length) return;
+    rows.push(`<tr class="i10-group-row"><td colspan="4">${escapeHtml(label)}</td></tr>`);
+    classRows.forEach(p => rows.push(`<tr><td>${escapeHtml(i10AssetAlias(p))}</td><td>${escapeHtml(label)}</td><td class="num ${finiteNumber(p.sourceSnapshotReturn) >= 0 ? 'value-positive' : 'value-negative'}"><strong>${p.sourceSnapshotReturn == null ? '—' : fmt.pct(p.sourceSnapshotReturn)}</strong></td><td class="num">${i10PositionDisplayValue(p) == null ? '—' : fmt.brl(i10PositionDisplayValue(p))}</td></tr>`));
+  };
+  pushClassRows('Ativos internacionais', 'ativos_internacionais', international);
+  pushClassRows('Ações', 'acoes', equities);
+  pushClassRows('Reserva de valor', 'reserva_valor', reserve);
+  pushClassRows('Criptomoedas', 'cripto', crypto);
   const ctx = i10AnalysisContext(data, report);
   const wealth = ctx.closingWealth;
   const gain = ctx.accumulatedGain;
@@ -7217,6 +7282,58 @@ window.lgvReportSetStatus = setStatus;
     };
   }
 
+  function moduleAssetKey(value) {
+    return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  function moduleResolvedAssetClass(position = {}, registry = []) {
+    const keys = [position.assetId, position.ticker, position.assetName].map(moduleAssetKey).filter(Boolean);
+    const asset = normalizeAssetRegistry(registry).find(item => {
+      const assetKeys = [item?.assetId, item?.ticker, item?.assetName, item?.name].map(moduleAssetKey).filter(Boolean);
+      return keys.some(key => assetKeys.includes(key));
+    });
+    return String(asset?.classLGV || position?.classLGV || '').trim();
+  }
+
+  function rebuildInvestidor10AllocationByClass(report = {}, positions = [], registry = []) {
+    if (!positions.length) return clone(report?.allocationByClass, []) || [];
+    const existing = Array.isArray(report?.allocationByClass) ? report.allocationByClass : [];
+    const existingMap = new Map(existing.map(row => [String(row?.classLGV || '').trim(), row]));
+    const totals = new Map();
+    const costs = new Map();
+    positions.forEach(position => {
+      const key = moduleResolvedAssetClass(position, registry);
+      if (!key) return;
+      const market = Number(position?.marketValue ?? position?.sourceMarketValue);
+      const cost = Number(position?.displayedCostBasis ?? position?.costBasis ?? position?.investedValue);
+      if (Number.isFinite(market)) totals.set(key, (totals.get(key) || 0) + market);
+      if (Number.isFinite(cost)) costs.set(key, (costs.get(key) || 0) + cost);
+    });
+    const total = [...totals.values()].reduce((sum, value) => sum + value, 0);
+    if (!(total > 0)) return clone(existing, []) || [];
+    const keys = [];
+    const addKey = key => { if (key && !keys.includes(key)) keys.push(key); };
+    existing.forEach(row => addKey(String(row?.classLGV || '').trim()));
+    totals.forEach((_, key) => addKey(key));
+    return keys.map(key => {
+      const old = existingMap.get(key) || { classLGV:key };
+      const currentValue = totals.get(key) || 0;
+      const displayedCostBasis = costs.has(key) ? costs.get(key) : Number(old?.displayedCostBasis);
+      const safeCost = Number.isFinite(displayedCostBasis) ? displayedCostBasis : null;
+      const capitalResultOnCost = safeCost === null ? null : currentValue - safeCost;
+      return {
+        ...old,
+        classLGV:key,
+        currentValue,
+        currentWeight: currentValue / total,
+        displayedCostBasis:safeCost,
+        capitalResultOnCost,
+        capitalReturnOnCost: safeCost !== null && Math.abs(safeCost) > 1e-9 ? capitalResultOnCost / safeCost : null,
+        currentClassSource:'client_asset_registry'
+      };
+    });
+  }
+
   function enrichInvestidor10Import(data = {}, period = '') {
     if (!isInvestidor10Payload(data)) return data;
     const copy = clone(data, {}) || {};
@@ -7251,6 +7368,10 @@ window.lgvReportSetStatus = setStatus;
       const rowDate = String(row?.date || row?.positionDate || '').slice(0,10);
       return rowPeriod === importPeriod || rowDate === snapshotDate;
     });
+    // Reclassifica a fotografia pelas classes LGV do perfil antes de gravar a memória.
+    // A categoria original da fonte continua preservada em sourceCategory.
+    report.allocationByClass = rebuildInvestidor10AllocationByClass(report, positionRows, copy.assetRegistry || []);
+    copy.reportSnapshots[importPeriod] = report;
     const summary = report.summary || {};
     const monthly = (copy.monthlyPerformance || []).find(row => normalizePeriodToken(row?.period || row?.month) === analysisPeriod) || null;
     const snapshot = {
@@ -7491,9 +7612,19 @@ window.lgvReportSetStatus = setStatus;
   }
 
   function normalizeAssetRegistry(value) {
-    if (Array.isArray(value)) return value;
-    if (value && typeof value === 'object') return Object.values(value);
-    return [];
+    const rows = Array.isArray(value) ? value : (value && typeof value === 'object' ? Object.values(value) : []);
+    return rows.map(item => {
+      const row = { ...(item || {}) };
+      const key = String(row.assetId || row.ticker || row.assetName || row.name || '').trim().toUpperCase();
+      // Regra LGV: USDC representa exposição ao dólar e compõe Ativos Internacionais,
+      // embora o Investidor10 o categorize tecnicamente como criptomoeda.
+      if (key === 'USDC' || key === 'USD COIN') {
+        row.classLGV = 'ativos_internacionais';
+        if (!row.type || String(row.type).toLowerCase().includes('cripto')) row.type = 'Stablecoin';
+        row.classificationStatus = row.classificationStatus || 'confirmed';
+      }
+      return row;
+    });
   }
 
   function extractNativeProfile(data = {}) {
