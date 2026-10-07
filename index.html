@@ -1802,10 +1802,14 @@
   body.pdf-mobile #i10Assets .i10-asset-table th:first-child,
   body.pdf-mobile #i10Assets .i10-asset-table td:first-child { width: 46% !important; }
   body.pdf-mobile #i10Assets .i10-asset-table th:nth-child(3),
-  body.pdf-mobile #i10Assets .i10-asset-table td:nth-child(3) { width: 23% !important; }
+  body.pdf-mobile #i10Assets .i10-asset-table td:nth-child(3) { width: 26% !important; }
+  body.pdf-mobile #i10Assets .i10-asset-table th:nth-child(3) {
+    font-size: 8.4px !important;
+    line-height: 1.12 !important;
+  }
   body.pdf-mobile #i10Assets .i10-asset-table th:nth-child(4),
   body.pdf-mobile #i10Assets .i10-asset-table td:nth-child(4) {
-    width: 31% !important;
+    width: 28% !important;
     white-space: nowrap !important;
     font-size: 9.2px !important;
   }
@@ -3608,7 +3612,7 @@ function i10ExecutiveNarrative(data, report) {
   if (cdi !== null) first += `, enquanto o CDI do período ficou em <strong>${fmt.pct(cdi)}</strong>`;
   if (vsCdi !== null) first += `. A diferença foi de <strong>${fmt.pp(vsCdi)}</strong>`;
   first += '.</p>';
-  const second = `<p>O patrimônio fechou o mês em <strong>${ctx.closingWealth === null ? '—' : fmt.brl(ctx.closingWealth)}</strong>${ctx.monthlyGain === null ? '' : `, com ganho de capital de <strong>${fmt.brl(ctx.monthlyGain)}</strong> no mês`}${ctx.accumulatedGain === null ? '' : ` e ganho total acumulado de <strong>${fmt.brl(ctx.accumulatedGain)}</strong>`}. ${ctx.previousWealth === null ? '' : `No fechamento anterior, o patrimônio era de <strong>${fmt.brl(ctx.previousWealth)}</strong>.`}</p>`;
+  const second = `<p>O patrimônio fechou o mês em <strong>${ctx.closingWealth === null ? '—' : fmt.brl(ctx.closingWealth)}</strong>${ctx.monthlyGain === null ? '' : `, com resultado de <strong>${fmt.brl(ctx.monthlyGain)}</strong> no mês`}${ctx.accumulatedGain === null ? '' : ` e ganho total acumulado de <strong>${fmt.brl(ctx.accumulatedGain)}</strong>`}. ${ctx.previousWealth === null ? '' : `No fechamento anterior, o patrimônio era de <strong>${fmt.brl(ctx.previousWealth)}</strong>.`}</p>`;
   const third = `<p>A distribuição exibida nas páginas seguintes usa a posição mais recente disponível, capturada em <strong>${snapshotDate}</strong>. Isso permite analisar o mês fechado sem perder a fotografia atual da carteira para os próximos ajustes.</p>`;
   const fourth = `<p>Considerando a taxa cadastrada de <strong>${feePct.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}% a.a.</strong>, os honorários estimados sobre o patrimônio de fechamento são de <strong>${fee === null ? '—' : fmt.brl(fee)}</strong>.</p>`;
   return first + second + third + fourth;
@@ -3620,7 +3624,7 @@ function renderI10ExecutiveSummary(data, report) {
   const benchmarkDiff = ctx.monthlyReturn !== null && cdi !== null ? ctx.monthlyReturn - cdi : null;
   const feePct = i10ClientFeeAnnualPct(data);
   const fee = ctx.closingWealth === null ? null : ctx.closingWealth * feePct / 100 / 12;
-  const secondLabel = benchmarkDiff !== null ? `vs. CDI (${fmt.pct(cdi)})` : 'Ganho no mês';
+  const secondLabel = benchmarkDiff !== null ? `vs. CDI (${fmt.pct(cdi)})` : 'Resultado no mês';
   const secondValue = benchmarkDiff !== null ? fmt.pp(benchmarkDiff) : (ctx.monthlyGain === null ? '—' : fmt.brl(ctx.monthlyGain));
   const secondHint = benchmarkDiff !== null ? (benchmarkDiff >= 0 ? 'Acima do benchmark' : 'Abaixo do benchmark') : 'Resultado líquido de aportes e resgates informados';
   const performanceHint = ctx.monthlyReturnSource === 'lgv_snapshot_modified_dietz'
@@ -3688,7 +3692,7 @@ function renderI10BenchmarkPage(data, report) {
   const revision = b.current?.sourceRevisionDate ? ` · série revisada em ${fmt.date(String(b.current.sourceRevisionDate).slice(0,10))}` : '';
   return `
   <section class="report-page" id="i10Benchmark">
-    ${renderHead(`Carteira x CDI · ${fmt.month(b.ctx.analysisPeriod)}`, data, report)}
+    ${renderHead('Carteira x CDI', data, report)}
     <div class="report-body">
       <div class="i10-benchmark-grid">
         <div class="metric-card"><div class="metric-label">Carteira no mês</div><div class="metric-value ${monthlyReturn !== null && monthlyReturn >= 0 ? 'value-positive' : 'value-negative'}">${monthlyReturn === null ? '—' : fmt.pct(monthlyReturn)}</div><div class="metric-hint">Rentabilidade mais recente da série Investidor10</div></div>
@@ -3962,14 +3966,14 @@ function renderI10AssetPerformance(data, report) {
   <section class="report-page" id="i10Assets">
     ${renderHead(`Performance dos ativos e perspectivas · posição em ${fmt.date(report.positionFinalDate || report.periodEnd)}`, data, report)}
     <div class="report-body">
-      <div class="chart-card"><table class="table i10-asset-table"><thead><tr><th>Ativo</th><th>Grupo</th><th class="num">Rentabilidade</th><th class="num">Valor atual</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
+      <div class="chart-card"><table class="table i10-asset-table"><thead><tr><th>Ativo</th><th>Grupo</th><th class="num">Rentabilidade da posição</th><th class="num">Valor atual</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
       <div class="section-title">Resumo consolidado</div>
       <div class="i10-summary-lines">
         <div class="i10-summary-line"><span>Patrimônio no fechamento de ${escapeHtml(fmt.month(ctx.analysisPeriod))}</span><strong>${wealth === null ? '—' : fmt.brl(wealth)}</strong></div>
-        <div class="i10-summary-line"><span>Ganho de capital no mês</span><strong class="${ctx.monthlyGain !== null && ctx.monthlyGain >= 0 ? 'value-positive' : 'value-negative'}">${ctx.monthlyGain === null ? '—' : fmt.brl(ctx.monthlyGain)}</strong></div>
+        <div class="i10-summary-line"><span>Resultado no mês</span><strong class="${ctx.monthlyGain !== null && ctx.monthlyGain >= 0 ? 'value-positive' : 'value-negative'}">${ctx.monthlyGain === null ? '—' : fmt.brl(ctx.monthlyGain)}</strong></div>
         <div class="i10-summary-line"><span>Ganho total acumulado no fechamento</span><strong class="${gain !== null && gain >= 0 ? 'value-positive' : 'value-negative'}">${gain === null ? '—' : fmt.brl(gain)}</strong></div>
       </div>
-      <div class="chart-subtitle" style="margin-top:10px;">A análise mensal acima é de ${escapeHtml(fmt.month(ctx.analysisPeriod))}. As rentabilidades e valores por ativo são preservados conforme exibidos no snapshot do Investidor10 em ${fmt.date(report.positionFinalDate || report.periodEnd)}.</div>
+      <div class="chart-subtitle" style="margin-top:10px;">A análise mensal acima é de ${escapeHtml(fmt.month(ctx.analysisPeriod))}. A coluna <strong>Rentabilidade da posição</strong> reproduz a rentabilidade exibida pelo Investidor10 no snapshot de ${fmt.date(report.positionFinalDate || report.periodEnd)} e não representa, necessariamente, o retorno de ${escapeHtml(fmt.month(ctx.analysisPeriod))}.</div>
     </div>${renderFooter()}
   </section>`;
 }
