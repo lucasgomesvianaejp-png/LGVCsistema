@@ -402,6 +402,17 @@
     .i10-legend-swatch { width:10px; height:10px; border-radius:3px; flex:0 0 auto; }
     .i10-allocation-table td:first-child, .i10-asset-table td:first-child { font-weight: 750; }
     .i10-group-row td { background:#f4efe5; color:#5c5142; font-weight:900 !important; text-transform:uppercase; letter-spacing:.035em; font-size:11px; }
+
+    /* Investidor10 · tabela de ativos: separa visualmente os dois cabeçalhos numéricos */
+    #i10Assets .i10-asset-table th:nth-child(3) {
+      font-size: 9.6px;
+      padding-right: 18px;
+      line-height: 1.15;
+    }
+    #i10Assets .i10-asset-table th:nth-child(4) {
+      padding-left: 18px;
+    }
+
     .i10-summary-lines { display:grid; gap:8px; margin-top:14px; }
     .i10-summary-line { display:flex; justify-content:space-between; gap:18px; padding:10px 12px; border-radius:10px; background:#fffaf1; border:1px solid #f0dfbe; }
     .i10-summary-line strong { white-space:nowrap; }
@@ -1804,8 +1815,12 @@
   body.pdf-mobile #i10Assets .i10-asset-table th:nth-child(3),
   body.pdf-mobile #i10Assets .i10-asset-table td:nth-child(3) { width: 26% !important; }
   body.pdf-mobile #i10Assets .i10-asset-table th:nth-child(3) {
-    font-size: 8.4px !important;
-    line-height: 1.12 !important;
+    font-size: 7.8px !important;
+    line-height: 1.10 !important;
+    padding-right: 9px !important;
+  }
+  body.pdf-mobile #i10Assets .i10-asset-table th:nth-child(4) {
+    padding-left: 9px !important;
   }
   body.pdf-mobile #i10Assets .i10-asset-table th:nth-child(4),
   body.pdf-mobile #i10Assets .i10-asset-table td:nth-child(4) {
