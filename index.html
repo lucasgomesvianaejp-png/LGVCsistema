@@ -4351,12 +4351,39 @@ function getOfficialMonthlyReturn(data, report) {
 }
 
 function getOfficialAccumulatedReturn(data, report) {
+  const rows = getMonthlySinceStart(data, report);
+  const expectedStartPeriod = String(getBenchmarkStartDate(data, report) || '').slice(0,7);
+  const completeFromStart = rows.length > 0 && (!expectedStartPeriod || rows[0]?.period === expectedStartPeriod);
+
+  let compounded = null;
+  if (completeFromStart) {
+    let factor = 1;
+    let valid = true;
+    for (const item of rows) {
+      const monthly = finiteNumber(item?.monthlyReturn, item?.return);
+      if (monthly === null) {
+        valid = false;
+        break;
+      }
+      factor *= (1 + monthly);
+    }
+    if (valid) compounded = factor - 1;
+  }
+
   const row = getOfficialMonthlyRow(data, report);
-  return finiteNumber(
+  const stored = finiteNumber(
     row?.accumulatedReturn,
     report?.summary?.accumulatedReturnOfficial,
     data?.rentabilitySummary?.sinceStartPercent != null ? Number(data.rentabilitySummary.sinceStartPercent) / 100 : null
   );
+
+  // Prioriza o acumulado salvo apenas quando ele reconcilia com a composição
+  // das rentabilidades mensais oficiais. Tolerância: 0,05 p.p.
+  if (compounded !== null) {
+    if (stored === null || Math.abs(stored - compounded) > 0.0005) return compounded;
+    return stored;
+  }
+  return stored;
 }
 
 function isDailyPerformanceTrusted(data, report) {
@@ -4700,17 +4727,17 @@ function buildBenchmarkComparison(data, report) {
   if (useMonthly) {
     let factor = 1;
     const monthlyPts = sourceRows.map(row => {
-      const officialAccumulated = finiteNumber(row.accumulatedReturn);
-      if (officialAccumulated !== null) {
-        factor = 1 + officialAccumulated;
-      } else {
-        const monthlyReturn = finiteNumber(row.monthlyReturn, 0) || 0;
-        factor *= (1 + monthlyReturn);
-      }
+      const monthlyReturn = finiteNumber(row.monthlyReturn, row.return, 0) || 0;
+      factor *= (1 + monthlyReturn);
+      const compounded = factor - 1;
+      const storedAccumulated = finiteNumber(row.accumulatedReturn);
+      const reconciledAccumulated = (
+        storedAccumulated !== null && Math.abs(storedAccumulated - compounded) <= 0.0005
+      ) ? storedAccumulated : compounded;
       return {
         date: row.date,
         label: row.date.slice(5,7) + '/' + row.date.slice(2,4),
-        value: factor - 1
+        value: reconciledAccumulated
       };
     });
     portfolioPts = [basePoint, ...monthlyPts.filter(p => p.date !== benchmarkStart)];
@@ -5654,6 +5681,13 @@ function renderPage4(data, report, goal) {
   const initial = goal.initial || rawGoal.initialSimulation || {};
   const benchmark = buildBenchmarkComparison(data, report);
   const shareAccumulated = getOfficialAccumulatedReturn(data, report) ?? benchmark.portfolioAccumulated;
+  const officialMonthlyRow = getOfficialMonthlyRow(data, report);
+  const storedAccumulatedRaw = finiteNumber(officialMonthlyRow?.accumulatedReturn, s.accumulatedReturnOfficial);
+  const accumulatedWasRecomposed = (
+    shareAccumulated !== null
+    && storedAccumulatedRaw !== null
+    && Math.abs(shareAccumulated - storedAccumulatedRaw) > 0.0005
+  );
   const cdiMonth = state.market.cdi[state.selectedPeriod]?.value ?? s.cdiReturn;
   const cdiAccum = benchmark.cdiAccumulated ?? state.market.cdiFromStart[state.selectedPeriod]?.value;
   const ipcaPeriodState = state.market.ipcaPeriod[state.selectedPeriod] || {};
