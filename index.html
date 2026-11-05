@@ -5230,10 +5230,10 @@ function normalizeIncomeData(data, report) {
   const hasSeparatedForeignCurrency = !!(src.foreignCurrency && Object.values(src.foreignCurrency).some(row => row && row.includedInBRLTotal === false));
   const last12MonthsTotal = pickFirstNumber(
     src.last12MonthsBRLTotal,
-    hasSeparatedForeignCurrency ? null : src.last12MonthsTotal,
-    hasSeparatedForeignCurrency ? null : src.trailing12MonthsTotal,
-    hasSeparatedForeignCurrency ? null : src.total12m,
-    hasSeparatedForeignCurrency ? null : (monthlyEvolution.length ? last12FromEvolution : null)
+    hasSeparatedForeignCurrency ? undefined : src.last12MonthsTotal,
+    hasSeparatedForeignCurrency ? undefined : src.trailing12MonthsTotal,
+    hasSeparatedForeignCurrency ? undefined : src.total12m,
+    monthlyEvolution.length ? last12FromEvolution : undefined
   );
   const historicalTotal = pickFirstNumber(
     src.historicalBRLTotal, src.historicalTotal, src.fullHistoryTotal, src.totalHistorico, src.accumulatedTotal, accumulatedTotal
@@ -5295,6 +5295,7 @@ function renderIncomeSummaryCards(income) {
     ? `${fmt.date(income.historyStartDate)} a ${fmt.date(income.historyEndDate)}`
     : 'Todo o histórico disponível';
   const hasForeignUSD = income.foreignMonthlyUSD !== null && income.foreignMonthlyUSD !== undefined && Math.abs(Number(income.foreignMonthlyUSD) || 0) > 0.000001;
+  const hasIncomeValue = value => value !== null && value !== undefined && Number.isFinite(Number(value));
   const cards = [
     { label:'Proventos no mês', value:fmt.brl(income.monthlyTotal), cls:'value-positive', hint:'Somente valores em BRL' },
     { label:`Proventos em ${year}`, value: income.ytdTotal === null || income.ytdTotal === undefined ? '—' : fmt.brl(income.ytdTotal), cls:'value-positive', hint:'BRL no ano-calendário' },
@@ -5303,7 +5304,7 @@ function renderIncomeSummaryCards(income) {
   if (hasForeignUSD) {
     cards.push({ label:'Dividendos em USD no mês', value:fmt.usd(income.foreignMonthlyUSD), cls:'value-positive', hint:'Mantidos separados do BRL' });
   } else {
-    cards.push({ label:'Últimos 12 meses', value: income.last12MonthsTotal === null || income.last12MonthsTotal === undefined ? '—' : fmt.brl(income.last12MonthsTotal), cls:'value-positive', hint:'Janela móvel até a data-base' });
+    cards.push({ label:'Últimos 12 meses', value: hasIncomeValue(income.last12MonthsTotal) ? fmt.brl(income.last12MonthsTotal) : '—', cls:'value-positive', hint:'Somente BRL · janela móvel até a data-base' });
   }
 
   if (hasRealEstate) {
