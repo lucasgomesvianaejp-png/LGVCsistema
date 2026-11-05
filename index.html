@@ -3160,7 +3160,7 @@ async function refreshMarketRates() {
     .filter(row => row?.period && row.isPartial !== true)
     .map(row => String(row.period).slice(0,7))
     .sort()[0] || '';
-  const consultingStart = state.data.client?.consultingStartDate || (earliestMonthlyPeriod ? `${earliestMonthlyPeriod}-01` : start);
+  const consultingStart = getBenchmarkStartDate(state.data, report) || (earliestMonthlyPeriod ? `${earliestMonthlyPeriod}-01` : start);
 
   const cdiPill = document.getElementById('cdiPill');
   const ipcaPill = document.getElementById('ipcaPill');
@@ -3174,7 +3174,7 @@ async function refreshMarketRates() {
       return iso >= start && iso <= end;
     });
     const cdi = accumulateRates(cdiPeriod);
-    const cdiStart = accumulateRates(cdiAll);
+    const cdiStart = accumulateDailyRatesAligned(cdiAll, consultingStart, end).value;
     state.market.cdi[marketPeriodKey] = { value: cdi, records: cdiPeriod.length, start, end };
     state.market.cdiSeries[state.selectedPeriod] = cdiAll;
     state.market.cdiSeries[marketPeriodKey] = cdiAll;
@@ -4278,12 +4278,36 @@ function isoFromBRDate(brDate) {
   return `${y}-${m}-${d}`;
 }
 
+function getBenchmarkStartDate(data, report) {
+  const closedMonthly = (data?.monthlyPerformance || [])
+    .filter(row => row?.period && row.isPartial !== true)
+    .sort((a,b) => String(a.period).localeCompare(String(b.period)));
+  const firstMonthly = closedMonthly[0] || null;
+  return firstMonthly?.coverageStart
+    || data?.firstContribution?.date
+    || data?.client?.consultingStartDate
+    || data?.dailyPerformance?.[0]?.date
+    || report?.analysisStartDate
+    || report?.periodStart
+    || firstMonthly?.periodEnd
+    || '';
+}
+
 function getDailySinceStart(data, report) {
-  const start = data.client?.consultingStartDate || (data.dailyPerformance?.[0]?.date) || report.periodStart;
+  const start = getBenchmarkStartDate(data, report);
   const end = report.periodEnd;
   return (data.dailyPerformance || [])
     .filter(d => d.date >= start && d.date <= end)
     .sort((a,b) => a.date.localeCompare(b.date));
+}
+
+function accumulateDailyRatesAligned(items, startIso, endIso) {
+  if (!startIso || !endIso || endIso <= startIso) return { value: 0, records: 0 };
+  const filtered = (items || []).filter(item => {
+    const iso = isoFromBRDate(item?.data);
+    return iso > startIso && iso <= endIso;
+  });
+  return { value: accumulateRates(filtered), records: filtered.length };
 }
 
 function periodEndIso(period) {
@@ -4293,7 +4317,7 @@ function periodEndIso(period) {
 }
 
 function getMonthlySinceStart(data, report) {
-  const consultingStart = data.client?.consultingStartDate || report.periodStart;
+  const consultingStart = getBenchmarkStartDate(data, report);
   const startPeriod = String(consultingStart || '').slice(0,7);
   const endPeriod = String(report.periodEnd || '').slice(0,7);
   return (data.monthlyPerformance || [])
@@ -4660,15 +4684,22 @@ function renderAssetRows(rows, type) {
 function buildBenchmarkComparison(data, report) {
   const monthlyRows = getMonthlySinceStart(data, report);
   const useMonthly = monthlyRows.length > 0;
-  const rows = useMonthly ? monthlyRows : getDailySinceStart(data, report);
-  if (!rows.length) {
+  const sourceRows = useMonthly ? monthlyRows : getDailySinceStart(data, report);
+  if (!sourceRows.length) {
     return { source: 'unavailable', rows: [], portfolioPts: [], cdiPts: [], ipcaPts: [], portfolioAccumulated: null, cdiAccumulated: null, ipcaAccumulated: null, ipcaAccumulatedEstimated: false };
   }
 
-  let portfolioPts;
+  const benchmarkStart = getBenchmarkStartDate(data, report) || sourceRows[0]?.date;
+  const basePoint = {
+    date: benchmarkStart,
+    label: benchmarkStart ? benchmarkStart.slice(5,7) + '/' + benchmarkStart.slice(2,4) : '',
+    value: 0
+  };
+
+  let portfolioPts = [];
   if (useMonthly) {
     let factor = 1;
-    portfolioPts = rows.map((row, index) => {
+    const monthlyPts = sourceRows.map(row => {
       const officialAccumulated = finiteNumber(row.accumulatedReturn);
       if (officialAccumulated !== null) {
         factor = 1 + officialAccumulated;
@@ -4679,66 +4710,60 @@ function buildBenchmarkComparison(data, report) {
       return {
         date: row.date,
         label: row.date.slice(5,7) + '/' + row.date.slice(2,4),
-        value: index === 0 && finiteNumber(row.accumulatedReturn) === null ? 0 : factor - 1
+        value: factor - 1
       };
     });
+    portfolioPts = [basePoint, ...monthlyPts.filter(p => p.date !== benchmarkStart)];
   } else {
-    const baseShare = Number(rows[0].sharePrice) || 1;
-    portfolioPts = rows.map(row => ({
+    const first = sourceRows.find(row => row.date >= benchmarkStart) || sourceRows[0];
+    const baseShare = Number(first?.sharePrice) || 1;
+    const dailyPts = sourceRows.map(row => ({
       date: row.date,
       label: row.date.slice(5,7) + '/' + row.date.slice(2,4),
       value: baseShare ? ((Number(row.sharePrice) || baseShare) / baseShare) - 1 : 0
     }));
+    portfolioPts = dailyPts[0]?.date === benchmarkStart ? dailyPts : [basePoint, ...dailyPts];
   }
 
-  const buildNormalizedPts = (items, { monthly = false } = {}) => {
-    if (!items || !items.length) return { points: [], accumulated: null, estimated: false };
-    const sorted = [...items]
-      .filter(item => item && item.data)
-      .sort((a,b) => isoFromBRDate(a.data).localeCompare(isoFromBRDate(b.data)));
-    let factor = 1;
-    let idx = 0;
-    let baseFactor = null;
-    const points = rows.map((row, rowIdx) => {
-      const rowDate = monthly ? monthStartIso(row.date) : row.date;
-      while (idx < sorted.length && isoFromBRDate(sorted[idx].data) <= rowDate) {
-        factor *= (1 + decimalFromBCBValue(sorted[idx].valor));
-        idx++;
-      }
-      if (rowIdx === 0) baseFactor = factor || 1;
-      return {
-        date: row.date,
-        label: row.date.slice(5,7) + '/' + row.date.slice(2,4),
-        value: (factor / (baseFactor || 1)) - 1
-      };
-    });
-    const firstBenchmarkDate = monthly ? monthStartIso(rows[0].date) : rows[0].date;
-    const estimated = sorted.some(item => item.estimated && isoFromBRDate(item.data) > firstBenchmarkDate);
-    return { points, accumulated: points.length ? points.at(-1).value : null, estimated };
-  };
+  const chartDates = portfolioPts.map(p => p.date);
 
-  const cdi = buildNormalizedPts(state.market.cdiSeries[state.selectedPeriod] || []);
-  const ipcaItems = state.market.ipcaSeries[state.selectedPeriod] || [];
-  const ipcaPoints = rows.map((row, idx) => ({
-    date: row.date,
-    label: row.date.slice(5,7) + '/' + row.date.slice(2,4),
-    value: idx === 0 ? 0 : accumulateMonthlyRatesAligned(ipcaItems, rows[0].date, row.date).value
+  const cdiItems = state.market.cdiSeries[state.selectedPeriod] || [];
+  const cdiPts = chartDates.map(date => ({
+    date,
+    label: date.slice(5,7) + '/' + date.slice(2,4),
+    value: date === benchmarkStart ? 0 : accumulateDailyRatesAligned(cdiItems, benchmarkStart, date).value
   }));
-  const ipcaAccumulated = ipcaPoints.length ? ipcaPoints.at(-1).value : null;
-  const ipcaEstimated = accumulateMonthlyRatesAligned(ipcaItems, rows[0].date, rows.at(-1).date).estimated;
+  const cdiAccumulated = cdiPts.length ? cdiPts.at(-1).value : null;
+
+  const ipcaItems = state.market.ipcaSeries[state.selectedPeriod] || [];
+  const ipcaPts = chartDates.map(date => {
+    const aligned = date === benchmarkStart
+      ? { value: 0, estimated: false }
+      : accumulateMonthlyRatesAligned(ipcaItems, benchmarkStart, date);
+    return {
+      date,
+      label: date.slice(5,7) + '/' + date.slice(2,4),
+      value: aligned.value
+    };
+  });
+  const ipcaFinal = chartDates.length
+    ? accumulateMonthlyRatesAligned(ipcaItems, benchmarkStart, chartDates.at(-1))
+    : { value: null, estimated: false };
 
   return {
     source: useMonthly ? 'monthly' : 'daily_shares',
-    rows,
+    rows: portfolioPts,
+    benchmarkStart,
     portfolioPts,
-    cdiPts: cdi.points,
-    ipcaPts: ipcaPoints,
+    cdiPts,
+    ipcaPts,
     portfolioAccumulated: portfolioPts.length ? portfolioPts.at(-1).value : null,
-    cdiAccumulated: cdi.accumulated,
-    ipcaAccumulated,
-    ipcaAccumulatedEstimated: ipcaEstimated
+    cdiAccumulated,
+    ipcaAccumulated: ipcaFinal.value,
+    ipcaAccumulatedEstimated: ipcaFinal.estimated
   };
 }
+
 function renderPage1(data, report, goal) {
   const s = report.summary;
   const benchmark = buildBenchmarkComparison(data, report);
@@ -4778,7 +4803,7 @@ function renderPage1(data, report, goal) {
   if (isBlockEnabled('performanceChart')) chartCards.push(`
         <div class="chart-card chart-wide">
           <div class="chart-title">Rentabilidade da carteira x CDI x IPCA</div>
-          <div class="chart-subtitle">${benchmark.source === 'monthly' ? 'Performance mensal acumulada desde o início da consultoria.' : 'Performance por cotas, normalizada desde o início da consultoria.'}</div>
+          <div class="chart-subtitle">${benchmark.source === 'monthly' ? 'Carteira, CDI e IPCA acumulados a partir da mesma data-base.' : 'Performance por cotas, normalizada desde o início da consultoria.'}</div>
           <svg class="svg-chart" id="cdiAccumChart"></svg>
           <table class="performance-table">
             <thead><tr><th>Indicador</th><th>Variação do mês</th><th>Acumulado</th></tr></thead>
@@ -4840,6 +4865,7 @@ function renderPage1(data, report, goal) {
 
 function pickFirstNumber(...values) {
   for (const value of values) {
+    if (value === null || value === undefined || value === '') continue;
     const n = Number(value);
     if (Number.isFinite(n)) return n;
   }
@@ -5299,12 +5325,11 @@ function renderIncomeSummaryCards(income) {
   const cards = [
     { label:'Proventos no mês', value:fmt.brl(income.monthlyTotal), cls:'value-positive', hint:'Somente valores em BRL' },
     { label:`Proventos em ${year}`, value: income.ytdTotal === null || income.ytdTotal === undefined ? '—' : fmt.brl(income.ytdTotal), cls:'value-positive', hint:'BRL no ano-calendário' },
-    { label:'Histórico em BRL', value: income.historicalTotal === null || income.historicalTotal === undefined ? '—' : fmt.brl(income.historicalTotal), cls:'value-positive', hint:historyHint }
+    { label:'Histórico em BRL', value: income.historicalTotal === null || income.historicalTotal === undefined ? '—' : fmt.brl(income.historicalTotal), cls:'value-positive', hint:historyHint },
+    { label:'Últimos 12 meses', value: hasIncomeValue(income.last12MonthsTotal) ? fmt.brl(income.last12MonthsTotal) : '—', cls:'value-positive', hint:'Somente BRL · janela móvel até a data-base' }
   ];
   if (hasForeignUSD) {
     cards.push({ label:'Dividendos em USD no mês', value:fmt.usd(income.foreignMonthlyUSD), cls:'value-positive', hint:'Mantidos separados do BRL' });
-  } else {
-    cards.push({ label:'Últimos 12 meses', value: hasIncomeValue(income.last12MonthsTotal) ? fmt.brl(income.last12MonthsTotal) : '—', cls:'value-positive', hint:'Somente BRL · janela móvel até a data-base' });
   }
 
   if (hasRealEstate) {
@@ -5819,6 +5844,30 @@ function getQuarterTickIndices(points, maxTicks=7) {
   return ticks;
 }
 
+function enforceTickSpacing(indices, xFn, minSpacingPx=56) {
+  const unique = [...new Set(indices)].sort((a,b) => a-b);
+  if (unique.length <= 2) return unique;
+  const lastIndex = unique.at(-1);
+  const out = [];
+  unique.forEach(index => {
+    if (!out.length) {
+      out.push(index);
+      return;
+    }
+    if (index === lastIndex) {
+      while (out.length > 1 && xFn(index) - xFn(out.at(-1)) < minSpacingPx) out.pop();
+      if (xFn(index) - xFn(out.at(-1)) >= minSpacingPx || out.length === 1) out.push(index);
+      return;
+    }
+    if (xFn(index) - xFn(out.at(-1)) >= minSpacingPx) out.push(index);
+  });
+  if (!out.includes(lastIndex)) {
+    while (out.length > 1 && xFn(lastIndex) - xFn(out.at(-1)) < minSpacingPx) out.pop();
+    out.push(lastIndex);
+  }
+  return [...new Set(out)].sort((a,b) => a-b);
+}
+
 function getYTicks(min, max, count=5) {
   if (min === max) return [min];
   return Array.from({length: count}, (_, i) => min + ((max - min) * i / (count - 1)));
@@ -5840,11 +5889,24 @@ function drawMultiLineChart(elId, series, options={}) {
   const rangePad = (max - min) * .12 || .01;
   min -= rangePad; max += rangePad;
   const maxLen = Math.max(...series.map(s => s.points.length));
-  const x = i => padL + (i/(maxLen-1 || 1)) * (w - padL - padR);
+  const tickBase = series[0].points || [];
+  const dateValues = tickBase.map(p => p?.date ? Date.parse(`${p.date}T00:00:00Z`) : NaN);
+  const firstDate = dateValues.find(Number.isFinite);
+  const lastDate = [...dateValues].reverse().find(Number.isFinite);
+  const useTimeScale = Number.isFinite(firstDate) && Number.isFinite(lastDate) && lastDate > firstDate;
+  const x = i => {
+    if (useTimeScale && Number.isFinite(dateValues[i])) {
+      return padL + ((dateValues[i] - firstDate) / (lastDate - firstDate)) * (w - padL - padR);
+    }
+    return padL + (i/(maxLen-1 || 1)) * (w - padL - padR);
+  };
   const y = v => h - padB - ((v-min)/(max-min))*(h-padT-padB);
   const yTicks = getYTicks(min, max, mobile ? 4 : 5);
-  const tickBase = series[0].points || [];
-  const xTicks = getQuarterTickIndices(tickBase, mobile ? 4 : 7);
+  const xTicks = enforceTickSpacing(
+    getQuarterTickIndices(tickBase, mobile ? 5 : 7),
+    x,
+    mobile ? 54 : 64
+  );
   const zeroY = y(0);
   const yGrid = yTicks.map(t => `<line x1="${padL}" y1="${y(t)}" x2="${w-padR}" y2="${y(t)}" class="axis-grid"></line><text x="${padL-8}" y="${y(t)+4}" text-anchor="end" class="axis-text">${fmt.pct(t,1)}</text>`).join('');
   const xGrid = xTicks.map(i => `<line x1="${x(i)}" y1="${padT}" x2="${x(i)}" y2="${h-padB}" class="axis-grid" opacity=".55"></line><text x="${x(i)}" y="${h-10}" text-anchor="middle" class="axis-text">${formatMonthLabel(tickBase[i]?.date || '')}</text>`).join('');
@@ -5936,11 +5998,24 @@ function drawLineChart(elId, points, options={}) {
     min -= rangePad; max += rangePad;
     yTicks = getYTicks(min, max, mobile ? 4 : 5);
   }
-  const x = i => padL + (i/(points.length-1 || 1)) * (w - padL - padR);
+  const dateValues = points.map(p => p?.date ? Date.parse(`${p.date}T00:00:00Z`) : NaN);
+  const firstDate = dateValues.find(Number.isFinite);
+  const lastDate = [...dateValues].reverse().find(Number.isFinite);
+  const useTimeScale = Number.isFinite(firstDate) && Number.isFinite(lastDate) && lastDate > firstDate;
+  const x = i => {
+    if (useTimeScale && Number.isFinite(dateValues[i])) {
+      return padL + ((dateValues[i] - firstDate) / (lastDate - firstDate)) * (w - padL - padR);
+    }
+    return padL + (i/(points.length-1 || 1)) * (w - padL - padR);
+  };
   const y = v => h - padB - ((v-min)/(max-min || 1))*(h-padT-padB);
   const path = points.map((p,i) => `${i?'L':'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
   const area = `${path} L${x(points.length-1).toFixed(1)},${h-padB} L${padL},${h-padB} Z`;
-  const xTicks = getQuarterTickIndices(points, mobile ? 4 : 7);
+  const xTicks = enforceTickSpacing(
+    getQuarterTickIndices(points, mobile ? 5 : 7),
+    x,
+    mobile ? 54 : 64
+  );
   const yGrid = yTicks.map(t => `<line x1="${padL}" y1="${y(t)}" x2="${w-padR}" y2="${y(t)}" class="axis-grid"></line><text x="${padL-8}" y="${y(t)+4}" text-anchor="end" class="axis-text">${options.money === false ? fmt.pct(t,1) : compactMoneyTick(t)}</text>`).join('');
   const xGrid = xTicks.map(i => `<line x1="${x(i)}" y1="${padT}" x2="${x(i)}" y2="${h-padB}" class="axis-grid" opacity=".55"></line><text x="${x(i)}" y="${h-10}" text-anchor="middle" class="axis-text">${formatMonthLabel(points[i]?.date || '')}</text>`).join('');
   el.innerHTML = `
@@ -8870,7 +8945,7 @@ window.lgvReportSetStatus = setStatus;
     await setDoc(doc(db, CLIENTS_COLLECTION, clientId), { ...payload, updatedAt: serverTimestamp() }, { merge:true });
     if (activeClientData) {
       const bytes = new Blob([JSON.stringify(activeClientData)]).size;
-      if (bytes > 900_000) throw new Error('O cadastro ultrapassou o limite seguro desta versão do Firestore.');
+      if (bytes > 900_000) throw new Error(`Cadastro mesclado com ${(bytes/1024).toFixed(0)} KB: ultrapassa o limite seguro de 900 KB desta versão do Firestore.`);
       await setDoc(doc(db, DATA_COLLECTION, clientId), {
         clientId, data:sanitize(activeClientData), updatedAtIso:new Date().toISOString(), updatedAt:serverTimestamp()
       }, { merge:true });
@@ -8922,7 +8997,7 @@ window.lgvReportSetStatus = setStatus;
     };
     mergedData = applyNativeProfile(mergedData, nativeRecord);
     const bytes = new Blob([JSON.stringify(mergedData)]).size;
-    if (bytes > 900_000) throw new Error('O cadastro ultrapassou o limite seguro desta versão do Firestore.');
+    if (bytes > 900_000) throw new Error(`Cadastro mesclado com ${(bytes/1024).toFixed(0)} KB: ultrapassa o limite seguro de 900 KB desta versão do Firestore.`);
     const metadata = buildMetadata(mergedData);
     await setDoc(doc(db, DATA_COLLECTION, clientId), {
       clientId,
@@ -9051,7 +9126,7 @@ window.lgvReportSetStatus = setStatus;
     let restored = applyNativeProfile(imported, clientDoc);
     restored.clientId = clientId;
     const bytes = new Blob([JSON.stringify(restored)]).size;
-    if (bytes > 900_000) throw new Error('O cadastro ultrapassou o limite seguro desta versão do Firestore.');
+    if (bytes > 900_000) throw new Error(`Cadastro mesclado com ${(bytes/1024).toFixed(0)} KB: ultrapassa o limite seguro de 900 KB desta versão do Firestore.`);
     const metadata = buildMetadata(restored);
     await setDoc(doc(db, DATA_COLLECTION, clientId), {
       clientId,
@@ -9087,15 +9162,18 @@ window.lgvReportSetStatus = setStatus;
     saveTimer = setTimeout(() => {
       saveCurrent(reason, true).catch(error => {
         console.error('Falha na sincronização automática:', error);
-        setSyncStatus('Falha ao salvar', 'bad');
+        const detail = [error?.code, error?.message].filter(Boolean).join(' · ') || 'erro desconhecido';
+        setSyncStatus(`Falha ao salvar: ${detail}`, 'bad');
+        window.lgvReportSetStatus?.(`Firebase: ${detail}`, 'bad');
       });
     }, 1400);
   };
 
   function handleCloudError(error) {
     console.error(error);
-    setSyncStatus('Erro no Firebase', 'bad');
-    window.lgvReportSetStatus?.(`Firebase: ${error.message}`, 'bad');
+    const detail = [error?.code, error?.message].filter(Boolean).join(' · ') || 'erro desconhecido';
+    setSyncStatus(`Firebase: ${detail}`, 'bad');
+    window.lgvReportSetStatus?.(`Firebase: ${detail}`, 'bad');
   }
 
   function handleRoute() {
