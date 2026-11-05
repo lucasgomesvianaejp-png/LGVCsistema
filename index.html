@@ -4975,12 +4975,98 @@ function getReinvestmentCashWindows(data) {
     .sort((a,b) => String(a.cutoffDate || '').localeCompare(String(b.cutoffDate || '')));
 }
 
+function cashCutoffDatesForPeriod(period) {
+  const match = String(period || '').match(/^(\d{4})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  const nextYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const pad = value => String(value).padStart(2, '0');
+  return {
+    previousCutoffDate: `${year}-${pad(month)}-05`,
+    cutoffDate: `${nextYear}-${pad(nextMonth)}-05`
+  };
+}
+
+function collectCashIncomeEntries(data) {
+  const pools = [];
+  const add = value => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value.entries)) pools.push(...value.entries);
+  };
+  add(data?.income);
+  add(data?.proventos);
+  Object.values(data?.incomeSnapshots || {}).forEach(add);
+  Object.values(data?.proventosSnapshots || {}).forEach(add);
+  Object.values(data?.reportSnapshots || {}).forEach(report => {
+    add(report?.income);
+    add(report?.proventos);
+  });
+
+  const seen = new Set();
+  return pools.filter(entry => {
+    if (!entry || typeof entry !== 'object') return false;
+    const paymentDate = String(entry.paymentDate || entry.date || entry.receivedDate || entry.dataPagamento || entry.data || '').slice(0,10);
+    const asset = String(entry.assetId || entry.asset || entry.assetName || entry.ticker || '');
+    const amount = pickFirstNumber(entry.amount, entry.value, entry.total, entry.proceeds, entry.income, entry.netValue, entry.grossValue);
+    const currency = String(entry.currency || entry.moeda || 'BRL').toUpperCase();
+    const key = [paymentDate, asset, amount, currency, entry.incomeType || entry.type || ''].join('|');
+    if (!paymentDate || amount === null || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function deriveReinvestmentCashWindowForPeriod(data, period, windows = getReinvestmentCashWindows(data)) {
+  const dates = cashCutoffDatesForPeriod(period);
+  if (!dates || !windows.length) return null;
+
+  const previousWindow = windows
+    .filter(row => row.cutoffDate && row.cutoffDate <= dates.previousCutoffDate)
+    .at(-1);
+  if (!previousWindow) return null;
+
+  const entries = collectCashIncomeEntries(data);
+  const receiptsInWindowBRL = entries.reduce((sum, entry) => {
+    const paymentDate = String(entry.paymentDate || entry.date || entry.receivedDate || entry.dataPagamento || entry.data || '').slice(0,10);
+    const currency = String(entry.currency || entry.moeda || 'BRL').toUpperCase();
+    if (currency !== 'BRL') return sum;
+    if (!(paymentDate > dates.previousCutoffDate && paymentDate <= dates.cutoffDate)) return sum;
+    const amount = pickFirstNumber(entry.amount, entry.value, entry.total, entry.proceeds, entry.income, entry.netValue, entry.grossValue);
+    return sum + (Number(amount) || 0);
+  }, 0);
+
+  const previousPlanExecutedBRL = 0;
+  const openingBalanceBRL = Number(previousWindow.closingAvailableBalanceBRL || 0);
+  const manualAdjustmentsBRL = 0;
+  const closingAvailableBalanceBRL = openingBalanceBRL - previousPlanExecutedBRL + receiptsInWindowBRL + manualAdjustmentsBRL;
+
+  return normalizeReinvestmentCashWindow({
+    windowId: `${dates.previousCutoffDate}__${dates.cutoffDate}`,
+    linkedReportPeriod: period,
+    previousCutoffDate: dates.previousCutoffDate,
+    cutoffDate: dates.cutoffDate,
+    openingBalanceBRL,
+    previousPlanExecutedBRL,
+    receiptsInWindowBRL,
+    manualAdjustmentsBRL,
+    closingAvailableBalanceBRL,
+    boundaryRule:'start_exclusive_end_inclusive',
+    status:'derived'
+  });
+}
+
 function getReinvestmentCashWindowForPeriod(data, period = state.selectedPeriod) {
   const windows = getReinvestmentCashWindows(data);
   if (!windows.length) return null;
   const exact = windows.filter(row => row.linkedReportPeriod === period);
   if (exact.length) return exact.at(-1);
-  return windows.at(-1);
+
+  // Nunca reutiliza silenciosamente um ciclo ligado a outra competência.
+  // Quando possível, deriva o ciclo seguinte pelo corte operacional do dia 5.
+  return deriveReinvestmentCashWindowForPeriod(data, period, windows);
 }
 
 function cashWindowToAvailability(windowRow) {
@@ -5099,7 +5185,7 @@ function normalizeIncomeData(data, report) {
   if (!src) return null;
   const period = state.selectedPeriod;
   const entryAggregation = aggregateIncomeEntries(src.entries, period);
-  const evolutionRaw = src.monthlyEvolution || src.evolution || src.monthly || src.byMonth || src.months || [];
+  const evolutionRaw = src.monthlyEvolutionBRL || src.monthlyEvolution || src.evolution || src.monthly || src.byMonth || src.months || [];
   let monthlyEvolution = Array.isArray(evolutionRaw)
     ? evolutionRaw.map(normalizeMonthValue).filter(Boolean).sort((a,b) => a.month.localeCompare(b.month))
     : [];
@@ -5107,7 +5193,7 @@ function normalizeIncomeData(data, report) {
 
   const periodFromEvolution = monthlyEvolution.find(item => item.month === period)?.amount;
   const monthlyTotal = pickFirstNumber(
-    src.monthlyTotal, src.periodTotal, src.monthTotal, src.totalMonth, src.proventosNoMes,
+    src.monthlyBRLTotal, src.monthlyTotal, src.periodTotal, src.monthTotal, src.totalMonth, src.proventosNoMes,
     src.currentMonthTotal, periodFromEvolution
   ) ?? 0;
 
@@ -5138,14 +5224,20 @@ function normalizeIncomeData(data, report) {
 
   const realEstateMetrics = getRealEstateIncomeMetrics(data, report, src, byAsset);
   const ytdTotal = pickFirstNumber(
-    src.ytdTotal, src.yearToDateTotal, src.totalAno,
+    src.ytdBRLTotal, src.ytdTotal, src.yearToDateTotal, src.totalAno,
     monthlyEvolution.length ? ytdFromEvolution : null
   );
+  const hasSeparatedForeignCurrency = !!(src.foreignCurrency && Object.values(src.foreignCurrency).some(row => row && row.includedInBRLTotal === false));
   const last12MonthsTotal = pickFirstNumber(
-    src.last12MonthsTotal, src.trailing12MonthsTotal, src.total12m,
-    monthlyEvolution.length ? last12FromEvolution : null
+    src.last12MonthsBRLTotal,
+    hasSeparatedForeignCurrency ? null : src.last12MonthsTotal,
+    hasSeparatedForeignCurrency ? null : src.trailing12MonthsTotal,
+    hasSeparatedForeignCurrency ? null : src.total12m,
+    hasSeparatedForeignCurrency ? null : (monthlyEvolution.length ? last12FromEvolution : null)
   );
-  const historicalTotal = pickFirstNumber(src.historicalTotal, src.fullHistoryTotal, src.totalHistorico, src.accumulatedTotal, accumulatedTotal);
+  const historicalTotal = pickFirstNumber(
+    src.historicalBRLTotal, src.historicalTotal, src.fullHistoryTotal, src.totalHistorico, src.accumulatedTotal, accumulatedTotal
+  );
   const historyStartDate = src.historyStartDate || src.historicalStartDate || entryAggregation.firstDate || null;
   const historyEndDate = src.historyEndDate || src.historicalEndDate || entryAggregation.lastDate || report?.periodEnd || null;
 
@@ -5179,7 +5271,11 @@ function normalizeIncomeData(data, report) {
 
   const hasValue = Math.abs(monthlyTotal) > 0.0001 || Math.abs(accumulatedTotal) > 0.0001 || monthlyEvolution.length || byAsset.length || byType.length || rankings.history.BRL.length || reinvestmentAvailability || Math.abs(realEstateMetrics.realEstateMonthlyTotal || 0) > 0.0001;
   if (!hasValue) return null;
-  return { period, monthlyTotal, accumulatedTotal, historicalTotal, historyStartDate, historyEndDate, ytdTotal, last12MonthsTotal, monthlyEvolution, byAsset, byType, rankings, foreignCurrency, reinvestmentAvailability, ...realEstateMetrics };
+  const foreignMonthlyUSD = pickFirstNumber(
+    foreignCurrency?.USD?.monthlyTotal,
+    foreignCurrency?.usd?.monthlyTotal
+  );
+  return { period, monthlyTotal, accumulatedTotal, historicalTotal, historyStartDate, historyEndDate, ytdTotal, last12MonthsTotal, monthlyEvolution, byAsset, byType, rankings, foreignCurrency, foreignMonthlyUSD, reinvestmentAvailability, ...realEstateMetrics };
 }
 
 function renderIncomeRankingRows(rows, currency = 'BRL', limit = 5) {
@@ -5198,12 +5294,17 @@ function renderIncomeSummaryCards(income) {
   const historyHint = income.historyStartDate && income.historyEndDate
     ? `${fmt.date(income.historyStartDate)} a ${fmt.date(income.historyEndDate)}`
     : 'Todo o histórico disponível';
+  const hasForeignUSD = income.foreignMonthlyUSD !== null && income.foreignMonthlyUSD !== undefined && Math.abs(Number(income.foreignMonthlyUSD) || 0) > 0.000001;
   const cards = [
-    { label:'Proventos no mês', value:fmt.brl(income.monthlyTotal), cls:'value-positive', hint: income.period || 'Mês selecionado' },
-    { label:`Proventos em ${year}`, value: income.ytdTotal === null || income.ytdTotal === undefined ? '—' : fmt.brl(income.ytdTotal), cls:'value-positive', hint:'Ano-calendário até a data-base' },
-    { label:'Histórico consolidado', value: income.historicalTotal === null || income.historicalTotal === undefined ? '—' : fmt.brl(income.historicalTotal), cls:'value-positive', hint:`Critério consolidado MyProfit · ${historyHint}` },
-    { label:'Últimos 12 meses', value: income.last12MonthsTotal === null || income.last12MonthsTotal === undefined ? '—' : fmt.brl(income.last12MonthsTotal), cls:'value-positive', hint:'Janela móvel até a data-base' }
+    { label:'Proventos no mês', value:fmt.brl(income.monthlyTotal), cls:'value-positive', hint:'Somente valores em BRL' },
+    { label:`Proventos em ${year}`, value: income.ytdTotal === null || income.ytdTotal === undefined ? '—' : fmt.brl(income.ytdTotal), cls:'value-positive', hint:'BRL no ano-calendário' },
+    { label:'Histórico em BRL', value: income.historicalTotal === null || income.historicalTotal === undefined ? '—' : fmt.brl(income.historicalTotal), cls:'value-positive', hint:historyHint }
   ];
+  if (hasForeignUSD) {
+    cards.push({ label:'Dividendos em USD no mês', value:fmt.usd(income.foreignMonthlyUSD), cls:'value-positive', hint:'Mantidos separados do BRL' });
+  } else {
+    cards.push({ label:'Últimos 12 meses', value: income.last12MonthsTotal === null || income.last12MonthsTotal === undefined ? '—' : fmt.brl(income.last12MonthsTotal), cls:'value-positive', hint:'Janela móvel até a data-base' });
+  }
 
   if (hasRealEstate) {
     cards.splice(2, 0,
@@ -5301,7 +5402,7 @@ function renderIncomeSection(income, showSectionTitle = true) {
         </div>
         <div class="income-layout">
           <div>
-            <div class="chart-title">Evolução mensal dos proventos · consolidado MyProfit</div>
+            <div class="chart-title">Evolução mensal dos proventos em BRL</div>
             <svg class="svg-chart income-chart" id="incomeChart"></svg>
             ${renderForeignIncomeNote(income)}
           </div>
@@ -5647,7 +5748,7 @@ function renderPage4(data, report, goal) {
       </div>
 
       <div class="calculation-note">
-        ${benchmark.source === 'monthly' ? `A rentabilidade da carteira foi obtida da consolidação mensal de ${escapeHtml(report.source?.provider || data.source?.provider || data.dataSources?.consolidator || 'origem')}.` : 'A rentabilidade da carteira é calculada por cotas e considera o tempo de exposição de cada aporte.'} ${positionResult === null ? 'A fonte não disponibiliza dados suficientes para calcular com segurança o ganho financeiro do mês; por isso esse campo é apresentado como indisponível, sem conversão para zero.' : 'Já o ganho da posição mostra o resultado financeiro aproximado pela variação patrimonial ajustada pelos aportes e resgates. Por isso, os dois números podem ser diferentes.'}
+        ${benchmark.source === 'monthly' ? `A rentabilidade da carteira foi obtida da consolidação mensal de ${escapeHtml(report.source?.provider || data.source?.provider || data.dataSources?.consolidator || 'origem')}.` : 'A rentabilidade da carteira é calculada por cotas e considera o tempo de exposição de cada aporte.'} ${positionResult === null ? 'A fonte não disponibiliza dados suficientes para calcular com segurança o ganho financeiro do mês; por isso esse campo é apresentado como indisponível, sem conversão para zero.' : 'Já o ganho do mês mostra a variação patrimonial ajustada apenas por aportes e resgates externos. Proventos são apresentados separadamente e não são somados novamente ao ganho patrimonial.'}
       </div>
       ${renderDisclaimer()}
     </div>
