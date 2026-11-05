@@ -5167,7 +5167,8 @@ function normalizeIncomeData(data, report) {
     const typeRaw = row.type || row.name || row.label || row.nature || row.natureza;
     const type = friendlyIncomeTypeLabel(typeRaw);
     const amount = pickFirstNumber(row.amount, row.value, row.total, row.valor);
-    return type && amount !== null ? { type:String(type), amount } : null;
+    const currency = String(row.currency || row.moeda || 'BRL').toUpperCase();
+    return type && amount !== null ? { type:String(type), amount, currency } : null;
   }).filter(Boolean).sort((a,b) => b.amount - a.amount) : [];
   const foreignCurrency = src.foreignCurrency || src.byCurrency || null;
   const explicitReinvestmentAvailability = src.reinvestmentAvailability || src.availableForReinvestment || src.reinvestment || null;
@@ -5200,7 +5201,7 @@ function renderIncomeSummaryCards(income) {
   const cards = [
     { label:'Proventos no mês', value:fmt.brl(income.monthlyTotal), cls:'value-positive', hint: income.period || 'Mês selecionado' },
     { label:`Proventos em ${year}`, value: income.ytdTotal === null || income.ytdTotal === undefined ? '—' : fmt.brl(income.ytdTotal), cls:'value-positive', hint:'Ano-calendário até a data-base' },
-    { label:'Histórico recebido', value: income.historicalTotal === null || income.historicalTotal === undefined ? '—' : fmt.brl(income.historicalTotal), cls:'value-positive', hint:historyHint },
+    { label:'Histórico consolidado', value: income.historicalTotal === null || income.historicalTotal === undefined ? '—' : fmt.brl(income.historicalTotal), cls:'value-positive', hint:`Critério consolidado MyProfit · ${historyHint}` },
     { label:'Últimos 12 meses', value: income.last12MonthsTotal === null || income.last12MonthsTotal === undefined ? '—' : fmt.brl(income.last12MonthsTotal), cls:'value-positive', hint:'Janela móvel até a data-base' }
   ];
 
@@ -5220,11 +5221,15 @@ function renderIncomeSummaryCards(income) {
 
 function renderIncomeTypeCards(rows) {
   if (!rows || !rows.length) return '';
-  return `<div class="income-type-grid">${rows.slice(0,4).map(row => `
+  return `<div class="income-type-grid">${rows.slice(0,4).map(row => {
+    const currency = String(row.currency || 'BRL').toUpperCase();
+    const value = currency === 'USD' ? fmt.usd(row.amount) : fmt.brl(row.amount);
+    return `
     <div class="income-type-card">
       <span>${escapeHtml(row.type)}</span>
-      <strong>${fmt.brl(row.amount)}</strong>
-    </div>`).join('')}</div>`;
+      <strong>${value}</strong>
+    </div>`;
+  }).join('')}</div>`;
 }
 
 function renderReinvestmentAvailability(income) {
@@ -5296,7 +5301,7 @@ function renderIncomeSection(income, showSectionTitle = true) {
         </div>
         <div class="income-layout">
           <div>
-            <div class="chart-title">Evolução mensal dos proventos em BRL</div>
+            <div class="chart-title">Evolução mensal dos proventos · consolidado MyProfit</div>
             <svg class="svg-chart income-chart" id="incomeChart"></svg>
             ${renderForeignIncomeNote(income)}
           </div>
@@ -5761,6 +5766,53 @@ function drawMultiLineChart(elId, series, options={}) {
   `;
 }
 
+function niceMoneyStep(rawStep) {
+  if (!Number.isFinite(rawStep) || rawStep <= 0) return 1;
+  const power = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const normalized = rawStep / power;
+  const candidates = [1, 2, 2.5, 4, 5, 10];
+  const nice = candidates.find(value => value >= normalized) || 10;
+  return nice * power;
+}
+
+function compactMoneyTick(value) {
+  const abs = Math.abs(value);
+  if (abs >= 1000000) {
+    const n = value / 1000000;
+    return `R$ ${n.toLocaleString('pt-BR',{maximumFractionDigits:1})} mi`;
+  }
+  if (abs >= 1000) {
+    const n = value / 1000;
+    return `R$ ${n.toLocaleString('pt-BR',{maximumFractionDigits:0})} mil`;
+  }
+  return `R$ ${Math.round(value).toLocaleString('pt-BR')}`;
+}
+
+function moneyChartScale(values, targetIntervals=4) {
+  const finite = values.filter(Number.isFinite);
+  if (!finite.length) return { min:0, max:1, ticks:[0,1] };
+  const rawMin = Math.min(...finite);
+  const rawMax = Math.max(...finite);
+  if (rawMin === rawMax) {
+    const step = niceMoneyStep(Math.max(Math.abs(rawMax) * .2, 1));
+    const min = Math.max(0, rawMin - step * 2);
+    const max = rawMax + step * 2;
+    return { min, max, ticks:getYTicks(min,max,targetIntervals+1) };
+  }
+
+  // Se a série começou muito abaixo do patrimônio atual, usar zero como base deixa a
+  // evolução honesta e evita que o padding crie patrimônio negativo.
+  const anchorZero = rawMin >= 0 && rawMin <= rawMax * .25;
+  const visualMin = anchorZero ? 0 : rawMin - (rawMax - rawMin) * .08;
+  const visualMax = rawMax + (rawMax - rawMin) * .06;
+  const step = niceMoneyStep((visualMax - visualMin) / targetIntervals);
+  const min = anchorZero ? 0 : Math.floor(visualMin / step) * step;
+  const max = Math.ceil(visualMax / step) * step;
+  const ticks = [];
+  for (let value=min; value<=max + step*.001; value+=step) ticks.push(value);
+  return { min, max, ticks };
+}
+
 function drawLineChart(elId, points, options={}) {
   const el = document.getElementById(elId);
   if (!el) return;
@@ -5770,18 +5822,24 @@ function drawLineChart(elId, points, options={}) {
   el.setAttribute('viewBox', `0 0 ${w} ${h}`);
   el.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   el.style.overflow = 'hidden';
-  const padL = mobile ? 52 : 66, padR = mobile ? 14 : 24, padT = mobile ? 20 : 24, padB = mobile ? 30 : 36;
-  const vals = points.map(p => p.value);
-  let min = Math.min(...vals), max = Math.max(...vals);
-  const rangePad = (max - min) * .10 || Math.max(max * .01, 1);
-  min -= rangePad; max += rangePad;
+  const padL = mobile ? 58 : 72, padR = mobile ? 14 : 24, padT = mobile ? 20 : 24, padB = mobile ? 30 : 36;
+  const vals = points.map(p => Number(p.value)).filter(Number.isFinite);
+  const moneyScale = options.money === false ? null : moneyChartScale(vals, 4);
+  let min, max, yTicks;
+  if (moneyScale) {
+    ({ min, max, ticks:yTicks } = moneyScale);
+  } else {
+    min = Math.min(...vals); max = Math.max(...vals);
+    const rangePad = (max - min) * .10 || Math.max(Math.abs(max) * .01, 1);
+    min -= rangePad; max += rangePad;
+    yTicks = getYTicks(min, max, mobile ? 4 : 5);
+  }
   const x = i => padL + (i/(points.length-1 || 1)) * (w - padL - padR);
-  const y = v => h - padB - ((v-min)/(max-min))*(h-padT-padB);
+  const y = v => h - padB - ((v-min)/(max-min || 1))*(h-padT-padB);
   const path = points.map((p,i) => `${i?'L':'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
   const area = `${path} L${x(points.length-1).toFixed(1)},${h-padB} L${padL},${h-padB} Z`;
-  const yTicks = getYTicks(min, max, mobile ? 4 : 5);
   const xTicks = getQuarterTickIndices(points, mobile ? 4 : 7);
-  const yGrid = yTicks.map(t => `<line x1="${padL}" y1="${y(t)}" x2="${w-padR}" y2="${y(t)}" class="axis-grid"></line><text x="${padL-8}" y="${y(t)+4}" text-anchor="end" class="axis-text">${options.money === false ? fmt.pct(t,1) : fmt.brl(t).replace(',00','')}</text>`).join('');
+  const yGrid = yTicks.map(t => `<line x1="${padL}" y1="${y(t)}" x2="${w-padR}" y2="${y(t)}" class="axis-grid"></line><text x="${padL-8}" y="${y(t)+4}" text-anchor="end" class="axis-text">${options.money === false ? fmt.pct(t,1) : compactMoneyTick(t)}</text>`).join('');
   const xGrid = xTicks.map(i => `<line x1="${x(i)}" y1="${padT}" x2="${x(i)}" y2="${h-padB}" class="axis-grid" opacity=".55"></line><text x="${x(i)}" y="${h-10}" text-anchor="middle" class="axis-text">${formatMonthLabel(points[i]?.date || '')}</text>`).join('');
   el.innerHTML = `
     <rect x="0" y="0" width="100%" height="100%" fill="transparent"></rect>
