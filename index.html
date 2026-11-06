@@ -4284,6 +4284,54 @@ function isoFromBRDate(brDate) {
  return `${y}-${m}-${d}`;
 }
 
+function getConsultingStartDate(data, report) {
+ const isIso = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+ const explicitCandidates = [
+   data?.client?.consultingStartDate,
+   data?.client?.consultingStart,
+   data?.consultingStartDate,
+   report?.summary?.consultingStartDate,
+   data?.firstContribution?.date
+ ].filter(isIso);
+ if (explicitCandidates.length) return explicitCandidates[0];
+
+ const externalStart = (data?.externalFlows || [])
+   .filter(flow => {
+     const type = String(flow?.type || flow?.kind || '').toLowerCase();
+     return isIso(flow?.date) && (type.includes('aporte') || type.includes('contribution'));
+   })
+   .map(flow => flow.date)
+   .sort()[0];
+ if (externalStart) return externalStart;
+
+ const coverageStart = (data?.balanceHistory || [])
+   .map(row => row?.coverageStart)
+   .filter(isIso)
+   .sort()[0];
+ if (coverageStart) return coverageStart;
+
+ const policyStart = data?.allocationPolicy?.effectiveDate;
+ if (isIso(policyStart)) return policyStart;
+
+ return [
+   report?.analysisStartDate,
+   report?.periodStart
+ ].find(isIso) || '';
+}
+
+function getClientMethodologyNote(data, report) {
+ const startDate = getConsultingStartDate(data, report);
+ const startLabel = startDate ? fmt.date(startDate) : 'o início da consultoria';
+ const raw = String(report?.summary?.performanceMethodologyNote || '').trim();
+ if (raw) {
+   return raw.replace(
+     /composta desde\s+\d{2}\/\d{2}\/\d{4}/i,
+     `composta desde ${startLabel}`
+   );
+ }
+ return `A rentabilidade segue a metodologia LGV (Dietz modificado), composta desde ${startLabel}.`;
+}
+
 function getBenchmarkStartDate(data, report) {
  const closedMonthly = (data?.monthlyPerformance || [])
  .filter(row => row?.period && row.isPartial !== true)
@@ -4928,7 +4976,7 @@ function renderPage1(data, report, goal) {
  </div>
  ${s.returnDisplayPolicy === 'lgv_audited_continuity' ? `
  <div class="calculation-note">
- <strong>Nota de metodologia.</strong> ${escapeHtml(s.performanceMethodologyNote || 'A rentabilidade segue a metodologia LGV (Dietz modificado), composta desde 09/09/2025. A série do CDI foi revisada para a mesma data-base; relatórios anteriores podem apresentar valores diferentes.')}
+ <strong>Nota de metodologia.</strong> ${escapeHtml(getClientMethodologyNote(data, report))}
  </div>` : ''}` : ''}
 
  ${chartCards.length ? `
@@ -5948,7 +5996,7 @@ function renderPage4(data, report, goal) {
  <div class="assumption-list">
  ${renderAssumptionItem('Mês analisado', fmt.month(state.selectedPeriod))}
  ${renderAssumptionItem('Período do relatório', periodLabel(report))}
- ${renderAssumptionItem('Início da consultoria', fmt.date(data.client?.consultingStartDate || report.periodStart))}
+ ${renderAssumptionItem('Início da consultoria', fmt.date(getConsultingStartDate(data, report)))}
  ${renderAssumptionItem('Data-base da posição', fmt.date(report.positionFinalDate || report.periodEnd))}
  ${renderAssumptionItem('Perfil da carteira', escapeHtml(data.client?.profile || '—'))}
  </div>
@@ -6021,7 +6069,7 @@ function renderPage4(data, report, goal) {
 
  <div class="calculation-note">
  ${s.returnDisplayPolicy === 'lgv_audited_continuity'
- ? `A rentabilidade da carteira segue a metodologia LGV (Dietz modificado), composta desde 09/09/2025.`
+ ? `A rentabilidade da carteira segue a metodologia LGV (Dietz modificado), composta desde ${fmt.date(getConsultingStartDate(data, report))}.`
  : (benchmark.source === 'monthly' ? `A rentabilidade da carteira foi obtida da consolidação mensal de ${escapeHtml(report.source?.provider || data.source?.provider || data.dataSources?.consolidator || 'origem')}.` : 'A rentabilidade da carteira é calculada por cotas e considera o tempo de exposição de cada aporte.')}
  ${positionResult === null ? 'A fonte não disponibiliza dados suficientes para calcular com segurança o ganho financeiro do mês; por isso esse campo é apresentado como indisponível, sem conversão para zero.' : 'O ganho do mês mostra o resultado patrimonial, mantendo aportes externos e proventos separados. Reinvestimentos financiados por proventos são tratados como movimentações internas, e não como dinheiro novo.'}
  </div>
