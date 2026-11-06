@@ -2492,6 +2492,12 @@ function loadData(data) {
  return false;
  }
 
+ // Isolamento por cliente: descartar qualquer estado renderizado/gráfico anterior
+ // antes de carregar o novo payload.
+ state.currentData = null;
+ state.currentReport = null;
+ const reportRoot = document.getElementById('reportRoot');
+ if (reportRoot) reportRoot.innerHTML = '';
  state.data = data;
  state.selectedPeriod = getAvailablePeriods()[0] || null;
  applyStoredCommentPatches();
@@ -5046,11 +5052,13 @@ function normalizeIncomeAsset(row) {
  if (!row || typeof row !== 'object') return null;
  const asset = row.asset || row.assetName || row.ticker || row.name || row.codigo || row.ativo;
  const amount = pickFirstNumber(row.amount, row.value, row.total, row.proceeds, row.income, row.monthlyAmount, row.periodAmount);
- const accumulated = pickFirstNumber(row.accumulated, row.accumulatedAmount, row.totalAccumulated, row.total);
+ const accumulated = pickFirstNumber(row.accumulated, row.accumulatedAmount, row.totalAccumulated, row.historicalAmount);
  const classLGV = row.classLGV || row.class || row.category || row.categoria;
  const assetId = row.assetId || row.id || row.codigo || row.ticker;
+ const currency = String(row.currency || row.moeda || 'BRL').toUpperCase();
+ const includedInBRLTotal = row.includedInBRLTotal !== false && currency === 'BRL';
  if (!asset || (amount === null && accumulated === null)) return null;
- return { asset: String(asset), assetId: assetId ? String(assetId) : undefined, amount: amount ?? 0, accumulated, classLGV };
+ return { ...row, asset: String(asset), assetId: assetId ? String(assetId) : undefined, amount: amount ?? 0, accumulated, classLGV, currency, includedInBRLTotal };
 }
 
 function incomeMonthOrdinal(month) {
@@ -5317,7 +5325,9 @@ function aggregateIncomeEntries(entries, period) {
  const month = String(paymentDate || '').slice(0, 7);
  const amount = pickFirstNumber(entry.amount, entry.value, entry.total, entry.proceeds, entry.income, entry.valor);
  const asset = entry.asset || entry.assetName || entry.ticker || entry.name || entry.codigo || entry.ativo;
- if (!/^\d{4}-\d{2}$/.test(month) || amount === null || !asset) return;
+ const currency = String(entry.currency || entry.moeda || 'BRL').toUpperCase();
+ const includedInBRLTotal = entry.includedInBRLTotal !== false && currency === 'BRL';
+ if (!/^\d{4}-\d{2}$/.test(month) || amount === null || !asset || !includedInBRLTotal) return;
  if (period && month > period) return;
  monthly.set(month, (monthly.get(month) || 0) + amount);
  const key = String(asset);
@@ -5359,7 +5369,7 @@ function normalizeIncomeRankingRows(rows, accumulatedMode = false) {
  if (!row || typeof row !== 'object') return null;
  const asset = row.asset || row.assetName || row.ticker || row.name || row.codigo || row.ativo || row.assetId;
  const amount = accumulatedMode
- ? pickFirstNumber(row.accumulated, row.accumulatedAmount, row.totalAccumulated, row.historicalAmount, row.amount, row.value, row.total)
+ ? pickFirstNumber(row.accumulated, row.accumulatedAmount, row.totalAccumulated, row.historicalAmount)
  : pickFirstNumber(row.amount, row.value, row.total, row.proceeds, row.income, row.monthlyAmount, row.periodAmount);
  return asset && amount !== null ? { ...row, asset: String(asset), amount } : null;
  }).filter(Boolean).sort((a,b) => b.amount - a.amount);
@@ -5379,13 +5389,32 @@ function getRawIncomeSource(data, report) {
  data?.proventos,
  data?.dividends
  ];
- return candidates.find(item => item && typeof item === 'object') || null;
+ const currentClientId = String(data?.clientId || data?.client?.id || '').trim();
+ return candidates.find(item => {
+   if (!item || typeof item !== 'object') return false;
+   const owner = String(item.clientId || item.client?.id || '').trim();
+   if (owner && currentClientId && owner !== currentClientId) return false;
+   return true;
+ }) || null;
 }
 
 function normalizeIncomeData(data, report) {
  const src = getRawIncomeSource(data, report);
  if (!src) return null;
  const period = state.selectedPeriod;
+ const noRecordStatus = /no[_\s-]*records|sem[_\s-]*registros|empty/i.test(String(src.status || ''));
+ const rawEntriesCount = Array.isArray(src.entries) ? src.entries.length : 0;
+ const rawByAssetCount = Array.isArray(src.byAsset) ? src.byAsset.length : 0;
+ const rawRankingCount = [
+   ...(src.rankings?.month?.BRL || []),
+   ...(src.rankings?.history?.BRL || []),
+   ...(src.rankings?.month?.USD || []),
+   ...(src.rankings?.history?.USD || [])
+ ].length;
+ const rawTotalCheck = [
+   src.monthlyBRLTotal, src.monthlyTotal, src.accumulatedTotal, src.historicalBRLTotal, src.historicalTotal
+ ].some(v => v !== null && v !== undefined && Math.abs(Number(v) || 0) > 0.000001);
+ if (noRecordStatus && rawEntriesCount === 0 && rawByAssetCount === 0 && rawRankingCount === 0 && !rawTotalCheck) return null;
  const entryAggregation = aggregateIncomeEntries(src.entries, period);
  const evolutionRaw = src.monthlyEvolutionBRL || src.monthlyEvolution || src.evolution || src.monthly || src.byMonth || src.months || [];
  let monthlyEvolution = Array.isArray(evolutionRaw)
@@ -5454,9 +5483,13 @@ function normalizeIncomeData(data, report) {
  const rawRankings = src.rankings && typeof src.rankings === 'object' ? src.rankings : {};
  const explicitMonthBRL = normalizeIncomeRankingRows(rawRankings?.month?.BRL || rawRankings?.monthly?.BRL || [], false);
  const explicitHistoryBRL = normalizeIncomeRankingRows(rawRankings?.history?.BRL || rawRankings?.historical?.BRL || [], true);
- const derivedMonthBRL = normalizeIncomeRankingRows(byAsset, false).filter(row => Math.abs(Number(row.amount) || 0) > 0.000001);
- const derivedHistoryBRL = normalizeIncomeRankingRows(byAsset, true).filter(row => Math.abs(Number(row.amount) || 0) > 0.000001);
- const historyFallback = derivedHistoryBRL.length ? derivedHistoryBRL : entryAggregation.historicalRanking;
+ const domesticByAsset = byAsset.filter(row => row.includedInBRLTotal !== false && String(row.currency || 'BRL').toUpperCase() === 'BRL');
+ const derivedMonthBRL = normalizeIncomeRankingRows(domesticByAsset, false).filter(row => Math.abs(Number(row.amount) || 0) > 0.000001);
+ const hasHistoricalAmounts = domesticByAsset.some(row => finiteNumber(row.accumulated, row.accumulatedAmount, row.totalAccumulated, row.historicalAmount) !== null);
+ const derivedHistoryBRL = hasHistoricalAmounts
+ ? normalizeIncomeRankingRows(domesticByAsset, true).filter(row => Math.abs(Number(row.amount) || 0) > 0.000001)
+ : [];
+ const historyFallback = entryAggregation.historicalRanking.length ? entryAggregation.historicalRanking : derivedHistoryBRL;
  const rankings = {
  ...rawRankings,
  month: { ...(rawRankings.month || {}), BRL: explicitMonthBRL.length ? explicitMonthBRL : derivedMonthBRL },
@@ -5507,6 +5540,8 @@ function renderIncomeSummaryCards(income) {
  ? `${fmt.date(income.historyStartDate)} a ${fmt.date(income.historyEndDate)}`
  : 'Todo o histórico disponível';
  const hasForeignUSD = income.foreignMonthlyUSD !== null && income.foreignMonthlyUSD !== undefined && Math.abs(Number(income.foreignMonthlyUSD) || 0) > 0.000001;
+ const foreignUSD = income?.foreignCurrency?.USD || income?.foreignCurrency?.usd || null;
+ const foreignIsNet = finiteNumber(foreignUSD?.monthlyNetUSD) !== null;
  const hasIncomeValue = value => value !== null && value !== undefined && Number.isFinite(Number(value));
  const cards = [
  { label:'Proventos no mês', value:fmt.brl(income.monthlyTotal), cls:'value-positive', hint:'Somente valores em BRL' },
@@ -5515,7 +5550,12 @@ function renderIncomeSummaryCards(income) {
  { label:'Últimos 12 meses', value: hasIncomeValue(income.last12MonthsTotal) ? fmt.brl(income.last12MonthsTotal) : '—', cls:'value-positive', hint:'Somente BRL · janela móvel até a data-base' }
  ];
  if (hasForeignUSD) {
- cards.push({ label:'Dividendos líquidos em USD no mês', value:fmt.usd(income.foreignMonthlyUSD), cls:'value-positive', hint:'Após imposto retido · separados do BRL' });
+ cards.push({
+   label: foreignIsNet ? 'Dividendos líquidos em USD no mês' : 'Dividendos em USD no mês',
+   value:fmt.usd(income.foreignMonthlyUSD),
+   cls:'value-positive',
+   hint: foreignIsNet ? 'Após imposto retido · separados do BRL' : 'Moeda nativa · separados do BRL'
+ });
  }
 
  if (hasRealEstate) {
