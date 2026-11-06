@@ -4361,12 +4361,15 @@ function getOfficialMonthlyReturn(data, report) {
 
 function getOfficialAccumulatedReturn(data, report) {
   if (report?.summary?.returnDisplayPolicy === 'lgv_audited_continuity') {
+    // Série auditada LGV: o acumulado salvo é autoridade.
+    // Nunca recompor a partir de retornos de mês-calendário, pois o primeiro
+    // período da consultoria pode começar no meio do mês (Marcus: 09/09/2025).
     const audited = finiteNumber(
       report?.summary?.accumulatedReturnAdjusted,
       report?.summary?.accumulatedReturnOfficial,
       getOfficialMonthlyRow(data, report)?.accumulatedReturn
     );
-    if (audited !== null) return audited;
+    return audited;
   }
   const rows = getMonthlySinceStart(data, report);
   const expectedStartPeriod = String(getBenchmarkStartDate(data, report) || '').slice(0,7);
@@ -4785,7 +4788,7 @@ function buildBenchmarkComparison(data, report) {
       factor *= (1 + monthlyReturn);
       const compounded = factor - 1;
       const storedAccumulated = finiteNumber(row.accumulatedReturn);
-      const reconciledAccumulated = auditedPolicy && storedAccumulated !== null
+      const reconciledAccumulated = auditedPolicy
         ? storedAccumulated
         : (
           storedAccumulated !== null && Math.abs(storedAccumulated - compounded) <= 0.0005
@@ -4795,7 +4798,7 @@ function buildBenchmarkComparison(data, report) {
         label: row.date.slice(5,7) + '/' + row.date.slice(2,4),
         value: reconciledAccumulated
       };
-    });
+    }).filter(row => row.value !== null);
     portfolioPts = [basePoint, ...monthlyPts.filter(p => p.date !== benchmarkStart)];
   } else {
     const first = sourceRows.find(row => row.date >= benchmarkStart) || sourceRows[0];
@@ -4920,6 +4923,7 @@ function renderPage1(data, report, goal) {
       ${s.returnDisplayPolicy === 'lgv_audited_continuity' ? `
       <div class="calculation-note">
         <strong>Nota de metodologia.</strong> ${escapeHtml(s.performanceMethodologyNote || 'Rentabilidade auditada pela LGV em continuidade com o relatório anterior.')}
+        <br><strong>Acumulado:</strong> composto a partir de 09/09/2025; o primeiro mês é um período parcial, não o mês-calendário completo.
         ${s.cdiRevisionNote ? `<br><strong>CDI:</strong> ${escapeHtml(s.cdiRevisionNote)}` : ''}
       </div>` : ''}` : ''}
 
