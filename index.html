@@ -4587,6 +4587,22 @@ function getMotorRowsWithResults(data, report) {
     }
   });
 
+  // Alguns resultados pertencem ao motor, mas não a um ativo negociável individual.
+  // Ex.: variação do caixa em USD da sleeve internacional.
+  if ((report.assetResults || []).length) {
+    (report.motors || []).forEach(m => {
+      const adjustment = pickFirstNumber(
+        m?.resultAdjustmentBRL,
+        m?.periodResultAdjustmentBRL,
+        m?.internationalCashAdjustmentBRL
+      );
+      if (adjustment === null || adjustment === 0) return;
+      const row = ensure(m.strategicFunction);
+      row.periodResult = (row.periodResult || 0) + adjustment;
+      row.periodResultStatus = 'available';
+    });
+  }
+
   Object.keys(accumulatedAudit.totals).forEach(key => {
     const canonical = canonicalMotorKey(key);
     const row = ensure(canonical);
@@ -4594,11 +4610,23 @@ function getMotorRowsWithResults(data, report) {
     row.accumulatedResultAvailable = !!accumulatedAudit.available[canonical];
   });
 
-  return Object.values(base).map(r => ({
+  const rows = Object.values(base).map(r => ({
     ...r,
     differenceWeight: r.differenceWeight ?? (r.targetWeight !== null ? r.currentWeight - r.targetWeight : null),
     periodReturn: r.initialValue && !resultUnavailable(r.periodResult, r.periodResultStatus) ? r.periodResult / r.initialValue : null
   })).sort((a,b) => motorOrderKey(a) - motorOrderKey(b));
+
+  const expectedTotal = finiteNumber(report?.summary?.financialResultPositionAdjusted);
+  if (expectedTotal !== null && rows.length) {
+    const currentTotal = rows.reduce((sum, r) => sum + (finiteNumber(r.periodResult) || 0), 0);
+    const diff = Math.round((expectedTotal - currentTotal) * 100) / 100;
+    if (Math.abs(diff) <= 0.05 && diff !== 0) {
+      const target = rows.find(r => canonicalMotorKey(r.strategicFunction) === 'seguranca_liquidez_motor_rendimento') || rows[0];
+      target.periodResult = (finiteNumber(target.periodResult) || 0) + diff;
+      target.periodReturn = target.initialValue ? target.periodResult / target.initialValue : null;
+    }
+  }
+  return rows;
 }
 
 function renderMotorRows(rows) {
@@ -4854,7 +4882,7 @@ function renderPage1(data, report, goal) {
 
       ${isBlockEnabled('summaryCards') ? `
       <div class="kpi-grid">
-        <div class="metric-card"><div class="metric-label">Aportes no mês</div><div class="metric-value">${moneyOrUnavailable(s.contributions, s.contributionsStatus)}</div><div class="metric-hint">${resultUnavailable(s.contributions, s.contributionsStatus) ? 'Não informado pela fonte' : 'Entradas externas'}</div></div>
+        <div class="metric-card"><div class="metric-label">Aporte externo no mês</div><div class="metric-value">${moneyOrUnavailable(s.contributions, s.contributionsStatus)}</div><div class="metric-hint">${resultUnavailable(s.contributions, s.contributionsStatus) ? 'Não informado pela fonte' : 'Dinheiro novo efetivamente realizado'}</div></div>
         <div class="metric-card"><div class="metric-label">Resgates no mês</div><div class="metric-value">${moneyOrUnavailable(s.withdrawals, s.withdrawalsStatus)}</div><div class="metric-hint">${resultUnavailable(s.withdrawals, s.withdrawalsStatus) ? 'Não informado pela fonte' : 'Saídas externas'}</div></div>
         <div class="metric-card"><div class="metric-label">Ganho do mês (R$)</div><div class="metric-value ${resultClass}">${positionResult === null ? '<span class="muted">Não disponível na fonte</span>' : fmt.brl(positionResult)}</div><div class="metric-hint">${positionResult === null ? 'A rentabilidade percentual mensal permanece disponível' : 'Posição detalhada'}</div></div>
         <div class="metric-card"><div class="metric-label">Ganho acumulado da posição</div><div class="metric-value ${accumulatedResultClass}">${accumulatedResult === null ? '<span class="muted">Não disponível na fonte</span>' : fmt.brl(accumulatedResult)}</div><div class="metric-hint">${accumulatedResult === null ? 'Custo/ganho individual incompleto na fonte' : 'Resultado atual dos ativos'}</div></div>
@@ -5354,12 +5382,19 @@ function normalizeIncomeData(data, report) {
   const ytdFromEvolution = monthlyEvolution
     .filter(item => item.month <= period && item.month.startsWith(periodYear + '-'))
     .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  const last12FromEvolution = monthlyEvolution
+  const last12Rows = monthlyEvolution
     .filter(item => {
       const ordinal = incomeMonthOrdinal(item.month);
       return ordinal !== null && periodOrdinal !== null && ordinal <= periodOrdinal && ordinal >= periodOrdinal - 11;
-    })
+    });
+  const last12FromEvolution = last12Rows
     .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const last12Ordinals = new Set(last12Rows.map(item => incomeMonthOrdinal(item.month)).filter(v => v !== null));
+  const hasCompleteLast12Evolution = (
+    periodOrdinal !== null
+    && last12Ordinals.size === 12
+    && Array.from({length:12}, (_,i) => periodOrdinal - i).every(v => last12Ordinals.has(v))
+  );
 
   const realEstateMetrics = getRealEstateIncomeMetrics(data, report, src, byAsset);
   const ytdTotal = pickFirstNumber(
@@ -5368,6 +5403,7 @@ function normalizeIncomeData(data, report) {
   );
   const hasSeparatedForeignCurrency = !!(src.foreignCurrency && Object.values(src.foreignCurrency).some(row => row && row.includedInBRLTotal === false));
   const last12MonthsTotal = pickFirstNumber(
+    hasCompleteLast12Evolution ? last12FromEvolution : undefined,
     src.last12MonthsBRLTotal,
     hasSeparatedForeignCurrency ? undefined : src.last12MonthsTotal,
     hasSeparatedForeignCurrency ? undefined : src.trailing12MonthsTotal,
@@ -5527,7 +5563,7 @@ function renderForeignIncomeNote(income) {
   return `<div class="foreign-currency-note">
     <strong>Dividendos líquidos em USD são mantidos separados dos valores em BRL.</strong><br />
     No mês: ${monthly === null ? '—' : fmt.usd(monthly)}${monthRows.length ? ` · principais: ${compact(monthRows)}` : ''}.<br />
-    No histórico: ${historical === null ? '—' : fmt.usd(historical)}${historyRows.length ? ` · principais: ${compact(historyRows)}` : ''}.
+    No histórico: ${historical === null ? 'não consolidado' : fmt.usd(historical)}${historyRows.length ? ` · principais: ${compact(historyRows)}` : ''}.
   </div>`;
 }
 
@@ -5605,7 +5641,7 @@ function renderPage2Results(data, report) {
       <div class="section-title" style="margin-top:0;">Resultado por classe no mês</div>
       <div class="chart-card result-card-page">
         <div class="chart-title">${classMonthlyUnavailable ? 'Disponibilidade do resultado mensal' : 'Contribuição financeira aproximada'}</div>
-        <div class="chart-subtitle">${classMonthlyUnavailable ? 'O consolidador não fornece o resultado mensal por classe LGV. A alocação atual e os alvos permanecem disponíveis normalmente.' : 'Calculada por comparação entre posições, ajustada por compras/vendas internas.'}</div>
+        <div class="chart-subtitle">${classMonthlyUnavailable ? 'O consolidador não fornece o resultado mensal por classe LGV. A alocação atual e os alvos permanecem disponíveis normalmente.' : 'Resultado patrimonial por classe, com aportes externos e proventos tratados separadamente.'}</div>
         <div class="compact-list">${classRows.length ? renderResultRows(classRows) : '<div class="muted">Não disponível na fonte.</div>'}</div>
       </div>` : ''}
 
@@ -5749,6 +5785,9 @@ function renderCommentPages(data, report) {
 function friendlyReconciliationStatus(status) {
   const labels = {
     acceptable: 'Dentro da tolerância',
+    audited_reconciled: 'Conciliado',
+    audited_reconciled_after_adjustments: 'Conciliado após ajustes',
+    audited_adjusted: 'Conciliado',
     acceptable_with_reservation: 'Conciliado com ressalva',
     monthly_official_primary_daily_unavailable: 'Conciliado · fonte mensal',
     position_and_monthly_close_reconciled_with_prior_source_restatement: 'Conciliado com ressalva',
@@ -5864,7 +5903,7 @@ function renderPage4(data, report, goal) {
           <h3>Números de controle</h3>
           <div class="assumption-list">
             ${renderAssumptionItem('Patrimônio consolidado', fmt.brl(s.currentWealthPositionDetail))}
-            ${renderAssumptionItem('Aportes no mês', resultUnavailable(s.contributions, s.contributionsStatus) ? 'Não disponível na fonte' : fmt.brl(s.contributions))}
+            ${renderAssumptionItem('Aporte externo no mês', resultUnavailable(s.contributions, s.contributionsStatus) ? 'Não disponível na fonte' : fmt.brl(s.contributions))}
             ${renderAssumptionItem('Resgates no mês', resultUnavailable(s.withdrawals, s.withdrawalsStatus) ? 'Não disponível na fonte' : fmt.brl(s.withdrawals))}
             ${renderAssumptionItem('Ganho do mês', positionResult === null ? 'Não disponível na fonte' : fmt.brl(positionResult))}
             ${renderAssumptionItem('Rentabilidade oficial do mês', getOfficialMonthlyReturn(data, report) === null ? '—' : fmt.pct(getOfficialMonthlyReturn(data, report)))}
@@ -5888,10 +5927,16 @@ function renderPage4(data, report, goal) {
           <h3>Conciliação</h3>
           <div class="assumption-list">
             ${renderAssumptionItem('Status', friendlyReconciliationStatus(reconcile.status))}
-            ${renderAssumptionItem('Patrimônio pela posição', fmt.brl(reconcile.positionDetailWealth ?? s.currentWealthPositionDetail))}
-            ${renderAssumptionItem('Patrimônio mensal consolidado', fmt.brl(reconcile.monthlyPerformanceWealth ?? s.currentWealthMonthlyPerformance ?? s.currentWealthPositionDetail))}
-            ${renderAssumptionItem('Diferença principal', fmt.brl(reconcileDifference))}
-            ${renderAssumptionItem('Série diária', ['not_reconciled','unavailable_for_2026-08_not_used','unavailable_for_august_close','unavailable','legacy_not_used'].includes(String(reconcile.dailySeriesStatus || report.performanceAudit?.dailySeriesStatus || data.dataQuality?.dailyPerformance?.status || '').toLowerCase()) ? 'Indisponível · não utilizada' : 'Conciliada')}
+            ${reconcile.sourceRawPositionWealth != null ? renderAssumptionItem('Patrimônio bruto da fonte', fmt.brl(reconcile.sourceRawPositionWealth)) : ''}
+            ${reconcile.duplicateCryptoAdjustment != null ? renderAssumptionItem('Ajustes documentados', fmt.brl(reconcile.duplicateCryptoAdjustment)) : ''}
+            ${renderAssumptionItem('Patrimônio consolidado ajustado', fmt.brl(reconcile.positionDetailWealth ?? s.currentWealthPositionDetail))}
+            ${renderAssumptionItem('Patrimônio mensal ajustado', fmt.brl(reconcile.monthlyPerformanceWealth ?? s.currentWealthMonthlyPerformance ?? s.currentWealthPositionDetail))}
+            ${renderAssumptionItem('Diferença final', fmt.brl(reconcileDifference))}
+            ${(() => {
+              const dailyStatus = String(reconcile.dailySeriesStatus || report.performanceAudit?.dailySeriesStatus || data.dataQuality?.dailyPerformance?.status || '').toLowerCase();
+              const unavailableDaily = !dailyStatus || ['not_reconciled','unavailable_for_2026-08_not_used','unavailable_for_august_close','unavailable','unavailable_not_used','legacy_not_used','rejected','review','unreliable'].includes(dailyStatus);
+              return renderAssumptionItem('Série diária', unavailableDaily ? 'Indisponível · não utilizada' : 'Conciliada');
+            })()}
             ${reconcile.dailyPerformanceWealth != null ? renderAssumptionItem('Patrimônio na série diária', fmt.brl(reconcile.dailyPerformanceWealth)) : ''}
             ${reconcile.dailyDifferenceValue != null ? renderAssumptionItem('Diferença da série diária', fmt.brl(reconcile.dailyDifferenceValue)) : ''}
           </div>
@@ -5899,7 +5944,7 @@ function renderPage4(data, report, goal) {
       </div>
 
       <div class="calculation-note">
-        ${benchmark.source === 'monthly' ? `A rentabilidade da carteira foi obtida da consolidação mensal de ${escapeHtml(report.source?.provider || data.source?.provider || data.dataSources?.consolidator || 'origem')}.` : 'A rentabilidade da carteira é calculada por cotas e considera o tempo de exposição de cada aporte.'} ${positionResult === null ? 'A fonte não disponibiliza dados suficientes para calcular com segurança o ganho financeiro do mês; por isso esse campo é apresentado como indisponível, sem conversão para zero.' : 'Já o ganho do mês mostra a variação patrimonial ajustada apenas por aportes e resgates externos. Proventos são apresentados separadamente e não são somados novamente ao ganho patrimonial.'}
+        ${benchmark.source === 'monthly' ? `A rentabilidade da carteira foi obtida da consolidação mensal de ${escapeHtml(report.source?.provider || data.source?.provider || data.dataSources?.consolidator || 'origem')}.` : 'A rentabilidade da carteira é calculada por cotas e considera o tempo de exposição de cada aporte.'} ${positionResult === null ? 'A fonte não disponibiliza dados suficientes para calcular com segurança o ganho financeiro do mês; por isso esse campo é apresentado como indisponível, sem conversão para zero.' : 'Já o ganho do mês mostra o resultado patrimonial, mantendo aportes externos e proventos separados. Reinvestimentos financiados por proventos são tratados como movimentações internas, e não como dinheiro novo.'}
       </div>
       ${renderDisclaimer()}
     </div>
@@ -6199,7 +6244,7 @@ function drawIncomeChart(income) {
   el.setAttribute('viewBox', `0 0 ${w} ${h}`);
   el.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   el.style.overflow = 'hidden';
-  const padL = mobile ? 44 : 58;
+  const padL = mobile ? 60 : 58;
   const padR = 16;
   const padT = 18;
   const padB = 28;
