@@ -4342,6 +4342,15 @@ function finiteNumber(...values) {
 
 function getOfficialMonthlyReturn(data, report) {
   const row = getOfficialMonthlyRow(data, report);
+  const audited = report?.summary?.returnDisplayPolicy === 'lgv_audited_continuity';
+  if (audited) {
+    return finiteNumber(
+      report?.summary?.periodReturnAdjusted,
+      row?.monthlyReturn,
+      report?.summary?.periodReturnOfficial,
+      report?.summary?.periodReturnBySharePrice
+    );
+  }
   return finiteNumber(
     row?.monthlyReturn,
     row?.return,
@@ -4351,6 +4360,14 @@ function getOfficialMonthlyReturn(data, report) {
 }
 
 function getOfficialAccumulatedReturn(data, report) {
+  if (report?.summary?.returnDisplayPolicy === 'lgv_audited_continuity') {
+    const audited = finiteNumber(
+      report?.summary?.accumulatedReturnAdjusted,
+      report?.summary?.accumulatedReturnOfficial,
+      getOfficialMonthlyRow(data, report)?.accumulatedReturn
+    );
+    if (audited !== null) return audited;
+  }
   const rows = getMonthlySinceStart(data, report);
   const expectedStartPeriod = String(getBenchmarkStartDate(data, report) || '').slice(0,7);
   const completeFromStart = rows.length > 0 && (!expectedStartPeriod || rows[0]?.period === expectedStartPeriod);
@@ -4590,7 +4607,14 @@ function getMotorRowsWithResults(data, report) {
   // Alguns resultados pertencem ao motor, mas não a um ativo negociável individual.
   // Ex.: variação do caixa em USD da sleeve internacional.
   if ((report.assetResults || []).length) {
+    const explicitAdjustments = new Set(
+      (report.assetResults || [])
+        .filter(a => a?.nonPositionAdjustment === true || a?.adjustmentType)
+        .map(a => canonicalMotorKey(a.strategicFunction))
+    );
     (report.motors || []).forEach(m => {
+      const motorKey = canonicalMotorKey(m.strategicFunction);
+      if (explicitAdjustments.has(motorKey)) return;
       const adjustment = pickFirstNumber(
         m?.resultAdjustmentBRL,
         m?.periodResultAdjustmentBRL,
@@ -4618,11 +4642,12 @@ function getMotorRowsWithResults(data, report) {
 
   const expectedTotal = finiteNumber(report?.summary?.financialResultPositionAdjusted);
   if (expectedTotal !== null && rows.length) {
-    const currentTotal = rows.reduce((sum, r) => sum + (finiteNumber(r.periodResult) || 0), 0);
-    const diff = Math.round((expectedTotal - currentTotal) * 100) / 100;
-    if (Math.abs(diff) <= 0.05 && diff !== 0) {
+    const round2 = v => Math.round((Number(v) || 0) * 100) / 100;
+    const displayedTotal = rows.reduce((sum, r) => sum + round2(r.periodResult), 0);
+    const displayDiff = round2(round2(expectedTotal) - round2(displayedTotal));
+    if (Math.abs(displayDiff) <= 0.05 && displayDiff !== 0) {
       const target = rows.find(r => canonicalMotorKey(r.strategicFunction) === 'seguranca_liquidez_motor_rendimento') || rows[0];
-      target.periodResult = (finiteNumber(target.periodResult) || 0) + diff;
+      target.periodResult = (finiteNumber(target.periodResult) || 0) + displayDiff;
       target.periodReturn = target.initialValue ? target.periodResult / target.initialValue : null;
     }
   }
@@ -4754,14 +4779,17 @@ function buildBenchmarkComparison(data, report) {
   let portfolioPts = [];
   if (useMonthly) {
     let factor = 1;
+    const auditedPolicy = report?.summary?.returnDisplayPolicy === 'lgv_audited_continuity';
     const monthlyPts = sourceRows.map(row => {
       const monthlyReturn = finiteNumber(row.monthlyReturn, row.return, 0) || 0;
       factor *= (1 + monthlyReturn);
       const compounded = factor - 1;
       const storedAccumulated = finiteNumber(row.accumulatedReturn);
-      const reconciledAccumulated = (
-        storedAccumulated !== null && Math.abs(storedAccumulated - compounded) <= 0.0005
-      ) ? storedAccumulated : compounded;
+      const reconciledAccumulated = auditedPolicy && storedAccumulated !== null
+        ? storedAccumulated
+        : (
+          storedAccumulated !== null && Math.abs(storedAccumulated - compounded) <= 0.0005
+        ) ? storedAccumulated : compounded;
       return {
         date: row.date,
         label: row.date.slice(5,7) + '/' + row.date.slice(2,4),
@@ -4886,9 +4914,14 @@ function renderPage1(data, report, goal) {
         <div class="metric-card"><div class="metric-label">Resgates no mês</div><div class="metric-value">${moneyOrUnavailable(s.withdrawals, s.withdrawalsStatus)}</div><div class="metric-hint">${resultUnavailable(s.withdrawals, s.withdrawalsStatus) ? 'Não informado pela fonte' : 'Saídas externas'}</div></div>
         <div class="metric-card"><div class="metric-label">Ganho do mês (R$)</div><div class="metric-value ${resultClass}">${positionResult === null ? '<span class="muted">Não disponível na fonte</span>' : fmt.brl(positionResult)}</div><div class="metric-hint">${positionResult === null ? 'A rentabilidade percentual mensal permanece disponível' : 'Posição detalhada'}</div></div>
         <div class="metric-card"><div class="metric-label">Ganho acumulado da posição</div><div class="metric-value ${accumulatedResultClass}">${accumulatedResult === null ? '<span class="muted">Não disponível na fonte</span>' : fmt.brl(accumulatedResult)}</div><div class="metric-hint">${accumulatedResult === null ? 'Custo/ganho individual incompleto na fonte' : 'Resultado atual dos ativos'}</div></div>
-        <div class="metric-card"><div class="metric-label">Rentabilidade no mês</div><div class="metric-value ${returnClass}">${shareMonthly === null ? '—' : fmt.pct(shareMonthly)}</div><div class="metric-hint">${benchmark.source === 'monthly' ? 'Consolidação mensal' : 'Metodologia de cotas'}</div></div>
+        <div class="metric-card"><div class="metric-label">Rentabilidade no mês</div><div class="metric-value ${returnClass}">${shareMonthly === null ? '—' : fmt.pct(shareMonthly)}</div><div class="metric-hint">${s.returnDisplayPolicy === 'lgv_audited_continuity' ? 'LGV · Modified Dietz auditado' : (benchmark.source === 'monthly' ? 'Consolidação mensal' : 'Metodologia de cotas')}</div></div>
         <div class="metric-card"><div class="metric-label">Rentabilidade acumulada</div><div class="metric-value ${accumulatedReturnClass}">${shareAccumulated === null ? '—' : fmt.pct(shareAccumulated)}</div><div class="metric-hint">Desde o início da consultoria</div></div>
-      </div>` : ''}
+      </div>
+      ${s.returnDisplayPolicy === 'lgv_audited_continuity' ? `
+      <div class="calculation-note">
+        <strong>Nota de metodologia.</strong> ${escapeHtml(s.performanceMethodologyNote || 'Rentabilidade auditada pela LGV em continuidade com o relatório anterior.')}
+        ${s.cdiRevisionNote ? `<br><strong>CDI:</strong> ${escapeHtml(s.cdiRevisionNote)}` : ''}
+      </div>` : ''}` : ''}
 
       ${chartCards.length ? `
       <div class="section-title">Evolução e desempenho</div>
@@ -5860,7 +5893,7 @@ function renderPage4(data, report, goal) {
           <h3>Fontes principais</h3>
           <div class="assumption-list">
             ${renderAssumptionItem('Patrimônio, alocação e ganhos', 'Posição detalhada')}
-            ${renderAssumptionItem('Rentabilidade da carteira', benchmark.source === 'monthly' ? `Consolidação mensal · ${escapeHtml(report.source?.provider || data.source?.provider || data.dataSources?.consolidator || 'fonte consolidada')}` : 'Cota diária')}
+            ${renderAssumptionItem('Rentabilidade da carteira', s.returnDisplayPolicy === 'lgv_audited_continuity' ? 'LGV · Modified Dietz auditado' : (benchmark.source === 'monthly' ? `Consolidação mensal · ${escapeHtml(report.source?.provider || data.source?.provider || data.dataSources?.consolidator || 'fonte consolidada')}` : 'Cota diária'))}
             ${renderAssumptionItem('CDI', 'BCB · SGS 12')}
             ${renderAssumptionItem('IPCA', `BCB · SGS 433${ipcaSuffix}`)}
             ${normalizeIncomeData(data, report) ? renderAssumptionItem('Proventos recebidos', 'Relatório de proventos') : ''}
@@ -5904,9 +5937,10 @@ function renderPage4(data, report, goal) {
           <div class="assumption-list">
             ${renderAssumptionItem('Patrimônio consolidado', fmt.brl(s.currentWealthPositionDetail))}
             ${renderAssumptionItem('Aporte externo no mês', resultUnavailable(s.contributions, s.contributionsStatus) ? 'Não disponível na fonte' : fmt.brl(s.contributions))}
+            ${s.internalResourcesIncorporatedIntoPositionsBRL != null ? renderAssumptionItem('Recursos internos incorporados às posições', fmt.brl(s.internalResourcesIncorporatedIntoPositionsBRL)) : ''}
             ${renderAssumptionItem('Resgates no mês', resultUnavailable(s.withdrawals, s.withdrawalsStatus) ? 'Não disponível na fonte' : fmt.brl(s.withdrawals))}
             ${renderAssumptionItem('Ganho do mês', positionResult === null ? 'Não disponível na fonte' : fmt.brl(positionResult))}
-            ${renderAssumptionItem('Rentabilidade oficial do mês', getOfficialMonthlyReturn(data, report) === null ? '—' : fmt.pct(getOfficialMonthlyReturn(data, report)))}
+            ${renderAssumptionItem(s.returnDisplayPolicy === 'lgv_audited_continuity' ? 'Rentabilidade auditada do mês' : 'Rentabilidade oficial do mês', getOfficialMonthlyReturn(data, report) === null ? '—' : fmt.pct(getOfficialMonthlyReturn(data, report)))}
             ${renderAssumptionItem('Ganho acumulado da posição', accumulatedGain === null ? 'Não disponível na fonte' : fmt.brl(accumulatedGain))}
             ${renderAssumptionItem('Ganho sobre capital investido', accumulatedGainPct === null ? 'Não disponível na fonte' : fmt.pct(accumulatedGainPct))}
           </div>
@@ -5944,7 +5978,11 @@ function renderPage4(data, report, goal) {
       </div>
 
       <div class="calculation-note">
-        ${benchmark.source === 'monthly' ? `A rentabilidade da carteira foi obtida da consolidação mensal de ${escapeHtml(report.source?.provider || data.source?.provider || data.dataSources?.consolidator || 'origem')}.` : 'A rentabilidade da carteira é calculada por cotas e considera o tempo de exposição de cada aporte.'} ${positionResult === null ? 'A fonte não disponibiliza dados suficientes para calcular com segurança o ganho financeiro do mês; por isso esse campo é apresentado como indisponível, sem conversão para zero.' : 'Já o ganho do mês mostra o resultado patrimonial, mantendo aportes externos e proventos separados. Reinvestimentos financiados por proventos são tratados como movimentações internas, e não como dinheiro novo.'}
+        ${s.returnDisplayPolicy === 'lgv_audited_continuity'
+          ? `A rentabilidade da carteira segue a metodologia auditada LGV (Modified Dietz), em continuidade com o relatório anterior. A série bruta do MyProfit foi mantida apenas para auditoria interna e não foi usada na rentabilidade apresentada devido a inconsistências identificadas nos proventos.`
+          : (benchmark.source === 'monthly' ? `A rentabilidade da carteira foi obtida da consolidação mensal de ${escapeHtml(report.source?.provider || data.source?.provider || data.dataSources?.consolidator || 'origem')}.` : 'A rentabilidade da carteira é calculada por cotas e considera o tempo de exposição de cada aporte.')}
+        ${positionResult === null ? 'A fonte não disponibiliza dados suficientes para calcular com segurança o ganho financeiro do mês; por isso esse campo é apresentado como indisponível, sem conversão para zero.' : 'O ganho do mês mostra o resultado patrimonial, mantendo aportes externos e proventos separados. Reinvestimentos financiados por proventos são tratados como movimentações internas, e não como dinheiro novo.'}
+        ${s.cdiRevisionNote ? ` ${escapeHtml(s.cdiRevisionNote)}` : ''}
       </div>
       ${renderDisclaimer()}
     </div>
