@@ -5417,7 +5417,7 @@ function normalizeIncomeRankingRows(rows, accumulatedMode = false) {
  if (!row || typeof row !== 'object') return null;
  const asset = row.asset || row.assetName || row.ticker || row.name || row.codigo || row.ativo || row.assetId;
  const amount = accumulatedMode
- ? pickFirstNumber(row.accumulated, row.accumulatedAmount, row.totalAccumulated, row.historicalAmount)
+ ? pickFirstNumber(row.accumulated, row.accumulatedAmount, row.totalAccumulated, row.historicalAmount, row.amount, row.value, row.total, row.proceeds, row.income)
  : pickFirstNumber(row.amount, row.value, row.total, row.proceeds, row.income, row.monthlyAmount, row.periodAmount);
  return asset && amount !== null ? { ...row, asset: String(asset), amount } : null;
  }).filter(Boolean).sort((a,b) => b.amount - a.amount);
