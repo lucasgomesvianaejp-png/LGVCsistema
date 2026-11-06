@@ -5072,6 +5072,80 @@ function collectCashIncomeEntries(data) {
   });
 }
 
+
+function previousPeriodKey(period) {
+  const match = String(period || '').match(/^(\d{4})-(\d{2})$/);
+  if (!match) return null;
+  let year = Number(match[1]);
+  let month = Number(match[2]) - 1;
+  if (month === 0) { month = 12; year -= 1; }
+  return `${year}-${String(month).padStart(2,'0')}`;
+}
+
+function confirmedPreviousPlanConsumptionBRL(data, period, previousWindow) {
+  const previousPeriod = previousPeriodKey(period);
+  const candidates = [
+    data?.actionPlanExecutionReview,
+    data?.cashCycleAudit,
+    data?.actionPlanExecutions?.[previousPeriod],
+    data?.reportSnapshots?.[period]?.actionPlanExecutionReview,
+    data?.reportSnapshots?.[period]?.previousActionPlanExecution,
+    data?.reportSnapshots?.[previousPeriod]?.actionPlanExecutionReview,
+    data?.reportSnapshots?.[previousPeriod]?.previousActionPlanExecution
+  ].filter(Boolean);
+
+  for (const row of candidates) {
+    const referencePeriod = row.referencePeriod || row.previousPlanReferencePeriod || row.period || null;
+    if (referencePeriod && previousPeriod && referencePeriod !== previousPeriod && referencePeriod !== period) continue;
+
+    const status = String(
+      row.proceedsConsumptionStatus
+      || row.consumptionStatus
+      || row.status
+      || ''
+    ).toLowerCase();
+
+    const explicitlyConsumed = pickFirstNumber(
+      row.proceedsConsumedBRL,
+      row.consumedByPreviousPlanBRL,
+      row.proceedsConsumedByPreviousPlanBRL
+    );
+
+    if (explicitlyConsumed !== null && explicitlyConsumed >= 0) {
+      if (
+        status.includes('fully_consumed')
+        || status.includes('executed')
+        || status.includes('confirmed')
+        || row.consultantConfirmation === true
+      ) return explicitlyConsumed;
+    }
+
+    const plannedProceeds = pickFirstNumber(
+      row.plannedProceeds,
+      row.plannedAvailableProceedsBRL,
+      row.previousPlanAvailableProceedsBRL
+    );
+
+    if (
+      plannedProceeds !== null
+      && (
+        status.includes('fully_consumed')
+        || status.includes('executed')
+        || status.includes('confirmed')
+        || row.consultantConfirmation === true
+      )
+    ) return plannedProceeds;
+  }
+
+  // Se há plano anterior usando proventos, mas nenhuma confirmação de execução,
+  // não assumir nem consumo zero nem consumo total.
+  const plan = data?.actionPlans?.[previousPeriod];
+  const plannedAvailable = pickFirstNumber(plan?.funding?.availableProceeds);
+  if (plannedAvailable !== null && plannedAvailable > 0) return null;
+
+  return 0;
+}
+
 function deriveReinvestmentCashWindowForPeriod(data, period, windows = getReinvestmentCashWindows(data)) {
   const dates = cashCutoffDatesForPeriod(period);
   if (!dates || !windows.length) return null;
@@ -5091,23 +5165,35 @@ function deriveReinvestmentCashWindowForPeriod(data, period, windows = getReinve
     return sum + (Number(amount) || 0);
   }, 0);
 
-  const previousPlanExecutedBRL = 0;
-  const openingBalanceBRL = Number(previousWindow.closingAvailableBalanceBRL || 0);
+  const previousCycleClosingBalanceBRL = Number(previousWindow.closingAvailableBalanceBRL || 0);
+  const confirmedConsumption = confirmedPreviousPlanConsumptionBRL(data, period, previousWindow);
+
+  // Se existe plano anterior com uso de proventos, mas a execução não está confirmada,
+  // é mais seguro não fabricar um caixa do que transportar saldo já potencialmente usado.
+  if (confirmedConsumption === null) return null;
+
+  const previousPlanExecutedBRL = Math.max(
+    0,
+    Math.min(previousCycleClosingBalanceBRL, Number(confirmedConsumption) || 0)
+  );
+  const openingBalanceBRL = Math.max(0, previousCycleClosingBalanceBRL - previousPlanExecutedBRL);
   const manualAdjustmentsBRL = 0;
-  const closingAvailableBalanceBRL = openingBalanceBRL - previousPlanExecutedBRL + receiptsInWindowBRL + manualAdjustmentsBRL;
+  const closingAvailableBalanceBRL = openingBalanceBRL + receiptsInWindowBRL + manualAdjustmentsBRL;
 
   return normalizeReinvestmentCashWindow({
     windowId: `${dates.previousCutoffDate}__${dates.cutoffDate}`,
     linkedReportPeriod: period,
     previousCutoffDate: dates.previousCutoffDate,
     cutoffDate: dates.cutoffDate,
+    previousCycleClosingBalanceBRL,
     openingBalanceBRL,
     previousPlanExecutedBRL,
+    proceedsConsumedByPreviousPlanBRL: previousPlanExecutedBRL,
     receiptsInWindowBRL,
     manualAdjustmentsBRL,
     closingAvailableBalanceBRL,
     boundaryRule:'start_exclusive_end_inclusive',
-    status:'derived'
+    status:'derived_reconciled'
   });
 }
 
@@ -5325,7 +5411,9 @@ function normalizeIncomeData(data, report) {
   const hasValue = Math.abs(monthlyTotal) > 0.0001 || Math.abs(accumulatedTotal) > 0.0001 || monthlyEvolution.length || byAsset.length || byType.length || rankings.history.BRL.length || reinvestmentAvailability || Math.abs(realEstateMetrics.realEstateMonthlyTotal || 0) > 0.0001;
   if (!hasValue) return null;
   const foreignMonthlyUSD = pickFirstNumber(
+    foreignCurrency?.USD?.monthlyNetUSD,
     foreignCurrency?.USD?.monthlyTotal,
+    foreignCurrency?.usd?.monthlyNetUSD,
     foreignCurrency?.usd?.monthlyTotal
   );
   return { period, monthlyTotal, accumulatedTotal, historicalTotal, historyStartDate, historyEndDate, ytdTotal, last12MonthsTotal, monthlyEvolution, byAsset, byType, rankings, foreignCurrency, foreignMonthlyUSD, reinvestmentAvailability, ...realEstateMetrics };
@@ -5356,7 +5444,7 @@ function renderIncomeSummaryCards(income) {
     { label:'Últimos 12 meses', value: hasIncomeValue(income.last12MonthsTotal) ? fmt.brl(income.last12MonthsTotal) : '—', cls:'value-positive', hint:'Somente BRL · janela móvel até a data-base' }
   ];
   if (hasForeignUSD) {
-    cards.push({ label:'Dividendos em USD no mês', value:fmt.usd(income.foreignMonthlyUSD), cls:'value-positive', hint:'Mantidos separados do BRL' });
+    cards.push({ label:'Dividendos líquidos em USD no mês', value:fmt.usd(income.foreignMonthlyUSD), cls:'value-positive', hint:'Após imposto retido · separados do BRL' });
   }
 
   if (hasRealEstate) {
@@ -5409,7 +5497,7 @@ function renderReinvestmentAvailability(income) {
       <div>
         <div class="metric-label">Caixa de proventos para o próximo plano</div>
         <div class="big value-positive">${fmt.brl(availableBRL)}</div>
-        <div class="meta">Saldo em reais já recebido e ainda não utilizado. Proventos em dólar ficam fora deste controle operacional.</div>
+        <div class="meta">Saldo em reais efetivamente disponível após a execução do plano anterior. Proventos em dólar ficam fora deste controle operacional.</div>
         <div class="reinvestment-breakdown">
           <div><span>Saldo transportado</span><strong>${fmt.brl(openingBRL)}</strong></div>
           <div><span>Recebido na janela</span><strong>${fmt.brl(receiptsBRL)}</strong></div>
@@ -5427,14 +5515,17 @@ function renderReinvestmentAvailability(income) {
 
 function renderForeignIncomeNote(income) {
   const usd = income?.foreignCurrency?.USD;
-  const monthly = pickFirstNumber(usd?.monthlyTotal);
-  const historical = pickFirstNumber(usd?.historicalTotal);
+  const monthly = pickFirstNumber(usd?.monthlyNetUSD, usd?.monthlyTotal);
+  const historical = pickFirstNumber(usd?.historicalNetUSD, usd?.historicalTotal);
   if (monthly === null && historical === null) return '';
   const monthRows = income?.rankings?.month?.USD || usd?.byAsset || [];
   const historyRows = income?.rankings?.history?.USD || usd?.historicalByAsset || [];
-  const compact = rows => (rows || []).slice(0,3).map(row => `${escapeHtml(row.asset || '—')} ${fmt.usd(Number(row.amount) || 0)}`).join(' · ');
+  const compact = rows => (rows || []).slice(0,3).map(row => {
+    const amount = pickFirstNumber(row?.netUSD, row?.amount);
+    return `${escapeHtml(row.asset || '—')} ${fmt.usd(amount || 0)}`;
+  }).join(' · ');
   return `<div class="foreign-currency-note">
-    <strong>Proventos em USD são mantidos separados dos valores em BRL.</strong><br />
+    <strong>Dividendos líquidos em USD são mantidos separados dos valores em BRL.</strong><br />
     No mês: ${monthly === null ? '—' : fmt.usd(monthly)}${monthRows.length ? ` · principais: ${compact(monthRows)}` : ''}.<br />
     No histórico: ${historical === null ? '—' : fmt.usd(historical)}${historyRows.length ? ` · principais: ${compact(historyRows)}` : ''}.
   </div>`;
