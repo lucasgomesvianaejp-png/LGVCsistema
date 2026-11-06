@@ -4922,9 +4922,7 @@ function renderPage1(data, report, goal) {
       </div>
       ${s.returnDisplayPolicy === 'lgv_audited_continuity' ? `
       <div class="calculation-note">
-        <strong>Nota de metodologia.</strong> ${escapeHtml(s.performanceMethodologyNote || 'Rentabilidade auditada pela LGV em continuidade com o relatório anterior.')}
-        <br><strong>Acumulado:</strong> composto a partir de 09/09/2025; o primeiro mês é um período parcial, não o mês-calendário completo.
-        ${s.cdiRevisionNote ? `<br><strong>CDI:</strong> ${escapeHtml(s.cdiRevisionNote)}` : ''}
+        <strong>Nota de metodologia.</strong> ${escapeHtml(s.performanceMethodologyNote || 'A rentabilidade segue a metodologia LGV (Dietz modificado), composta desde 09/09/2025. A série do CDI foi revisada para a mesma data-base; relatórios anteriores podem apresentar valores diferentes.')}
       </div>` : ''}` : ''}
 
       ${chartCards.length ? `
@@ -5983,10 +5981,9 @@ function renderPage4(data, report, goal) {
 
       <div class="calculation-note">
         ${s.returnDisplayPolicy === 'lgv_audited_continuity'
-          ? `A rentabilidade da carteira segue a metodologia auditada LGV (Modified Dietz), em continuidade com o relatório anterior. A série bruta do MyProfit foi mantida apenas para auditoria interna e não foi usada na rentabilidade apresentada devido a inconsistências identificadas nos proventos.`
+          ? `A rentabilidade da carteira segue a metodologia LGV (Dietz modificado), composta desde 09/09/2025.`
           : (benchmark.source === 'monthly' ? `A rentabilidade da carteira foi obtida da consolidação mensal de ${escapeHtml(report.source?.provider || data.source?.provider || data.dataSources?.consolidator || 'origem')}.` : 'A rentabilidade da carteira é calculada por cotas e considera o tempo de exposição de cada aporte.')}
         ${positionResult === null ? 'A fonte não disponibiliza dados suficientes para calcular com segurança o ganho financeiro do mês; por isso esse campo é apresentado como indisponível, sem conversão para zero.' : 'O ganho do mês mostra o resultado patrimonial, mantendo aportes externos e proventos separados. Reinvestimentos financiados por proventos são tratados como movimentações internas, e não como dinheiro novo.'}
-        ${s.cdiRevisionNote ? ` ${escapeHtml(s.cdiRevisionNote)}` : ''}
       </div>
       ${renderDisclaimer()}
     </div>
