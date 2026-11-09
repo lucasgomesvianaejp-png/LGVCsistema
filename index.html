@@ -2912,28 +2912,42 @@ function isGenericBrokerAccount(value) {
  return ['sua corretora','corretora do cliente','corretora'].includes(s);
 }
 
+function actionPlanUnitLabel(row) {
+ const name = String(row?.destination || row?.assetId || '').toLowerCase();
+ return name.includes('tesouro') ? 'títulos' : 'cotas';
+}
+
+function actionPlanHasMarketDetails(row) {
+ return !row?.pixKey && (Number(row?.quantity) > 0 || Number(row?.referencePrice) > 0);
+}
+
 function actionPlanOperationLabel(row) {
  const name = String(row?.destination || row?.assetId || 'Operação');
- if (row?.pixKey) return `Fazer PIX para ${row.account || name}`;
- if (/GOLD11/i.test(name) || /GOLD11/i.test(String(row?.assetId || ''))) {
+ if (row?.pixKey || /nomad/i.test(name) || /nomad/i.test(String(row?.account || ''))) {
+ return `Fazer PIX para ${row.account || name}`;
+ }
+ if (actionPlanHasMarketDetails(row)) {
+ const unit = actionPlanUnitLabel(row);
  return row?.quantity
- ? `Comprar ${row.quantity} cotas de GOLD11 pela corretora`
- : 'Comprar GOLD11 pela corretora';
+ ? `Comprar aproximadamente ${row.quantity} ${unit} de ${name} pela corretora`
+ : `Comprar ${name} pela corretora`;
  }
  return row?.account ? `Executar em ${row.account}` : 'Executar operação';
 }
 
-function renderActionPlanAllocations(plan) {
- const rows = (plan?.allocations || []).map(parseActionPlanRow);
+function renderActionPlanAllocations(plan, subset = null, startIndex = 0) {
+ const sourceRows = Array.isArray(subset) ? subset : (plan?.allocations || []);
+ const rows = sourceRows.map(parseActionPlanRow);
  if (!rows.length) return '<div class="row-sub">Nenhuma destinação estruturada informada.</div>';
  return rows.map((row, index) => {
  const hasPix = !!row.pixKey;
- const isGold = /GOLD11/i.test(String(row.destination || '')) || /GOLD11/i.test(String(row.assetId || ''));
- const brokerDetails = isGold ? `
+ const hasMarketDetails = actionPlanHasMarketDetails(row);
+ const unit = actionPlanUnitLabel(row);
+ const brokerDetails = hasMarketDetails ? `
  <div class="plan-broker-box">
  <div class="plan-broker-item"><span>Operação</span><strong>Comprar na corretora</strong></div>
- <div class="plan-broker-item"><span>Quantidade</span><strong>${row.quantity ? `${row.quantity} cotas` : '—'}</strong></div>
- <div class="plan-broker-item"><span>Cotação de referência</span><strong>${row.referencePrice ? fmt.brl(row.referencePrice) : '—'}</strong></div>
+ <div class="plan-broker-item"><span>Quantidade estimada</span><strong>${row.quantity ? `${row.quantity} ${unit}` : '—'}</strong></div>
+ <div class="plan-broker-item"><span>Preço de referência</span><strong>${row.referencePrice ? fmt.brl(row.referencePrice) : '—'}</strong></div>
  </div>` : '';
  const pixBox = hasPix ? `
  <div class="plan-pix-box">
@@ -2946,10 +2960,10 @@ function renderActionPlanAllocations(plan) {
  return `
  <div class="plan-operation-card">
  <div class="plan-operation-header">
- <div class="plan-step-badge">${index + 1}</div>
+ <div class="plan-step-badge">${startIndex + index + 1}</div>
  <div>
  <div class="plan-operation-title">${escapeHtml(row.destination)}</div>
- <div class="plan-operation-subtitle">${row.account && !isGenericBrokerAccount(row.account) ? escapeHtml(row.account) : (!isGold && row.assetId ? escapeHtml(row.assetId) : '')}</div>
+ <div class="plan-operation-subtitle">${row.account && !isGenericBrokerAccount(row.account) ? escapeHtml(row.account) : (!hasMarketDetails && row.assetId ? escapeHtml(row.assetId) : '')}</div>
  </div>
  <div class="plan-operation-amount">${fmt.brl(row.amount)}</div>
  </div>
@@ -2966,7 +2980,19 @@ function renderActionPlanDocument(data, report, plan) {
  const ok = Math.abs(totals.difference) <= 0.01;
  const cutoff = plan.resourceCutoff ? fmt.date(plan.resourceCutoff) : '—';
  const funding = plan.funding || {};
- return `
+ const allRows = Array.isArray(plan.allocations) ? plan.allocations : [];
+ const detailedCount = allRows.map(parseActionPlanRow).filter(actionPlanHasMarketDetails).length;
+ const splitPlan = allRows.length >= 5 && detailedCount >= 4;
+ const firstRows = splitPlan ? allRows.slice(0, 3) : allRows;
+ const secondRows = splitPlan ? allRows.slice(3) : [];
+ const closing = `
+ ${plan.observations ? `<div class="plan-closing-note">${escapeHtml(plan.observations)}</div>` : ''}
+ <div class="plan-check-line ${ok ? '' : 'warn'}">
+ <strong>${ok ? 'Plano conferido' : 'Atenção à conferência'}</strong>
+ <span>Recursos ${fmt.brl(totals.totalAvailable)} · Destinações ${fmt.brl(totals.allocationsTotal)} · Diferença ${fmt.brl(totals.difference)}</span>
+ </div>`;
+
+ const page1 = `
  <section class="report-page action-plan-page" id="pageActionPlan">
  ${renderHead(plan.title || 'Plano de ação', data, report)}
  <div class="report-body">
@@ -2988,16 +3014,25 @@ function renderActionPlanDocument(data, report, plan) {
  <div class="plan-strategy-card">${escapeHtml(plan.body)}</div>` : ''}
 
  <div class="section-title">Operações</div>
- <div class="plan-operation-list">${renderActionPlanAllocations(plan)}</div>
-
- ${plan.observations ? `<div class="plan-closing-note">${escapeHtml(plan.observations)}</div>` : ''}
- <div class="plan-check-line ${ok ? '' : 'warn'}">
- <strong>${ok ? 'Plano conferido' : 'Atenção à conferência'}</strong>
- <span>Recursos ${fmt.brl(totals.totalAvailable)} · Destinações ${fmt.brl(totals.allocationsTotal)} · Diferença ${fmt.brl(totals.difference)}</span>
- </div>
+ <div class="plan-operation-list">${renderActionPlanAllocations(plan, firstRows, 0)}</div>
+ ${splitPlan ? '<div class="plan-continuation-hint">Continua na próxima página</div>' : closing}
  </div>
  ${renderFooter()}
  </section>`;
+
+ if (!splitPlan) return page1;
+
+ const page2 = `
+ <section class="report-page action-plan-page action-plan-continuation" id="pageActionPlan2">
+ ${renderHead(`${plan.title || 'Plano de ação'} · continuação`, data, report)}
+ <div class="report-body">
+ <div class="section-title">Operações — continuação</div>
+ <div class="plan-operation-list">${renderActionPlanAllocations(plan, secondRows, firstRows.length)}</div>
+ ${closing}
+ </div>
+ ${renderFooter()}
+ </section>`;
+ return page1 + page2;
 }
 
 function updateActionPlanControls() {
@@ -7058,7 +7093,7 @@ async function openCleanA4PdfForPrint() {
  printWindow.document.open();
  printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>LGV Capital — Relatório</title><style>body{font-family:Arial,sans-serif;margin:0;padding:32px;background:#f7f5ef;color:#222}div{max-width:620px;margin:10vh auto;background:white;border:1px solid #e8decc;border-radius:16px;padding:28px}strong{display:block;margin-bottom:8px}
 
- /* v31.11 — Plano de ação em 1 página com alturas dinâmicas e sem sobreposição */
+ /* v31.12 — Plano de ação detalhado, com paginação automática e sem sobreposição */
  .action-plan-page .report-body { padding-top: 22px; }
  .plan-resource-hero {
  display:grid; grid-template-columns: 1.15fr .85fr; gap:12px; align-items:stretch;
@@ -7133,6 +7168,11 @@ async function openCleanA4PdfForPrint() {
  border:1px solid #cde8d7; background:#eef8f2; border-radius:11px; padding:8px 10px; font-size:10.5px;
  }
  .plan-check-line strong { font-size:11.5px; }
+ .plan-continuation-hint {
+ margin-top:10px; text-align:right; color:var(--gold-dark); font-size:10px; font-weight:850;
+ text-transform:uppercase; letter-spacing:.04em;
+ }
+ .action-plan-continuation .report-body { padding-top:24px; }
 
  @media (max-width:920px) {
  .plan-resource-hero { grid-template-columns:1fr; }
@@ -7269,13 +7309,16 @@ function buildActionPlanVectorPdf(plan, report) {
  const pageW = 210, pageH = 297, mx = 12;
  const contentW = pageW - mx*2;
  const client = state.data?.client || {};
+ const maxContentY = 281;
+ let pageNumber = 1;
 
- const drawHeader = () => {
+ const drawHeader = (continuation = false) => {
  pdf.setFillColor(...c.black); pdf.rect(0,0,pageW,29,'F');
  pdf.setFillColor(...c.gold); pdf.rect(0,0,pageW,2,'F');
  pdf.setTextColor(...c.gold); pdf.setFont('helvetica','bold'); pdf.setFontSize(16); pdf.text('LGV CAPITAL', mx, 10.5);
  pdf.setTextColor(220,220,220); pdf.setFont('helvetica','normal'); pdf.setFontSize(8.3);
- pdf.text(plan.title || 'Plano de Ação', mx, 16.5);
+ const headerTitle = `${plan.title || 'Plano de Ação'}${continuation ? ' · continuação' : ''}`;
+ pdf.text(headerTitle, mx, 16.5);
  pdf.setTextColor(...c.white); pdf.setFont('helvetica','bold'); pdf.setFontSize(8.8);
  pdf.text(String(client.name || 'Cliente'), pageW-mx, 9.5, {align:'right'});
  pdf.setTextColor(210,210,210); pdf.setFont('helvetica','normal'); pdf.setFontSize(7.5);
@@ -7287,7 +7330,7 @@ function buildActionPlanVectorPdf(plan, report) {
  const drawFooter = () => {
  pdf.setTextColor(115,115,115); pdf.setFont('helvetica','normal'); pdf.setFontSize(6.8);
  pdf.text('Lucas Gomes Viana · Consultor Financeiro · Consultor de Investimentos CVM', mx, 289.5);
- pdf.text('LGV Capital · Teresina - PI', mx, 293);
+ pdf.text(`LGV Capital · Teresina - PI · pág. ${pageNumber}`, mx, 293);
  };
 
  const fitOneLine = (value, x, y, maxW, startSize=11.5, minSize=8.5, font='courier', style='bold') => {
@@ -7302,13 +7345,23 @@ function buildActionPlanVectorPdf(plan, report) {
  pdf.text(String(value), x, y);
  };
 
- drawHeader();
+ const startContinuationPage = () => {
+ drawFooter();
+ pdf.addPage();
+ pageNumber += 1;
+ drawHeader(true);
+ let nextY = 35;
+ pdf.setTextColor(...c.goldDark); pdf.setFont('helvetica','bold'); pdf.setFontSize(8.2);
+ pdf.text('OPERAÇÕES — CONTINUAÇÃO', mx, nextY+1);
+ return nextY + 5;
+ };
+
+ drawHeader(false);
  let y = 34;
  const totals = actionPlanTotals(plan);
  const funding = plan.funding || {};
  const cutoff = plan.resourceCutoff ? fmt.date(plan.resourceCutoff) : '—';
 
- // Recursos: compacto, mas com hierarquia clara.
  pdfRoundedRect(pdf, mx, y, contentW, 20, 3.5, c.white, c.border);
  pdf.setFillColor(...c.gold); pdf.roundedRect(mx, y, 2.8, 20, 1.5, 1.5, 'F');
  pdf.setTextColor(...c.goldDark); pdf.setFont('helvetica','bold'); pdf.setFontSize(7.2); pdf.text('RECURSOS PARA O PLANO', mx+6, y+5.5);
@@ -7316,21 +7369,21 @@ function buildActionPlanVectorPdf(plan, report) {
  pdf.setTextColor(...c.muted); pdf.setFont('helvetica','normal'); pdf.setFontSize(7.4); pdf.text(`Corte operacional: ${cutoff}`, mx+6, y+17.6);
  y += 24;
 
- // Duas fontes lado a lado, sem redundância excessiva.
  const sourceItems = [
  ['Proventos disponíveis', funding.availableProceeds || 0],
  ['Aporte externo', funding.externalContribution || 0]
  ];
- const sw=(contentW-4)/2;
+ if ((Number(funding.otherResources)||0) !== 0) sourceItems.push(['Outros recursos', funding.otherResources || 0]);
+ const gap = 4;
+ const sw = (contentW - gap * (sourceItems.length - 1)) / sourceItems.length;
  sourceItems.forEach((it,i)=>{
- const x=mx+i*(sw+4);
+ const x=mx+i*(sw+gap);
  pdfRoundedRect(pdf,x,y,sw,12.5,2.6,c.softGold,c.border);
- pdf.setTextColor(...c.muted); pdf.setFont('helvetica','bold'); pdf.setFontSize(6.4); pdf.text(it[0].toUpperCase(),x+3.5,y+4.2);
- pdf.setTextColor(...c.black); pdf.setFontSize(10.6); pdf.text(fmt.brl(it[1]),x+3.5,y+9.5);
+ pdf.setTextColor(...c.muted); pdf.setFont('helvetica','bold'); pdf.setFontSize(6.1); pdf.text(it[0].toUpperCase(),x+3.2,y+4.2);
+ pdf.setTextColor(...c.black); pdf.setFontSize(10.2); pdf.text(fmt.brl(it[1]),x+3.2,y+9.5);
  });
  y += 16;
 
- // Orientação curta.
  if (plan.body) {
  pdf.setTextColor(...c.goldDark); pdf.setFont('helvetica','bold'); pdf.setFontSize(8.2); pdf.text('ORIENTAÇÃO', mx, y+1);
  y += 4;
@@ -7347,26 +7400,22 @@ function buildActionPlanVectorPdf(plan, report) {
 
  const rows=(plan.allocations||[]).map(parseActionPlanRow);
  rows.forEach((row,idx)=>{
- const isGold=/GOLD11/i.test(String(row.destination||''))||/GOLD11/i.test(String(row.assetId||''));
+ const hasMarketDetails = actionPlanHasMarketDetails(row);
  const hasPix=!!row.pixKey;
+ const unit = actionPlanUnitLabel(row);
  const note = String(row.cleanNote || '').trim();
-
- // v31.11: a altura do card passa a ser calculada pela altura REAL do conteúdo.
- // Isso impede que observações longas escapem da caixa ou avancem sobre o card seguinte.
  const noteFont = 6.3;
  const noteLineH = 1.18;
- const rawNoteLines = note ? pdf.splitTextToSize(note, contentW-14) : [];
- const noteLines = rawNoteLines.slice(0, 3);
+ const noteLines = note ? pdf.splitTextToSize(note, contentW-14).slice(0, 3) : [];
 
- let innerCursor = 14; // cabeçalho do card
- innerCursor += 9.5; // caixa de ação
+ let innerCursor = 14;
+ innerCursor += 9.5;
  if (hasPix) innerCursor += 12.5;
- if (isGold) innerCursor += 11.5;
-
- const noteBlockH = noteLines.length
- ? 3.0 + (noteLines.length * noteFont * 0.3528 * noteLineH)
- : 0;
+ if (hasMarketDetails) innerCursor += 11.5;
+ const noteBlockH = noteLines.length ? 3.0 + (noteLines.length * noteFont * 0.3528 * noteLineH) : 0;
  const h = innerCursor + noteBlockH + 3.2;
+
+ if (y + h + 3.5 > maxContentY) y = startContinuationPage();
 
  pdfRoundedRect(pdf,mx,y,contentW,h,3.2,c.white,c.border);
  pdf.setFillColor(...c.black); pdf.circle(mx+6.2,y+6.7,3.5,'F');
@@ -7374,7 +7423,6 @@ function buildActionPlanVectorPdf(plan, report) {
  pdf.setTextColor(...c.black); pdf.setFontSize(11.5); pdf.text(String(row.destination||'Operação'),mx+12.5,y+7.3);
  pdf.setFontSize(10.7); pdf.text(fmt.brl(row.amount),mx+contentW-4,y+7.3,{align:'right'});
 
- // Só mostra instituição quando foi realmente informada e não é rótulo genérico.
  const accountLabel = row.account && !isGenericBrokerAccount(row.account) ? String(row.account) : '';
  if (accountLabel) {
  pdf.setTextColor(...c.muted); pdf.setFont('helvetica','normal'); pdf.setFontSize(6.9); pdf.text(accountLabel,mx+12.5,y+11.5);
@@ -7393,18 +7441,18 @@ function buildActionPlanVectorPdf(plan, report) {
  cy += 12.5;
  }
 
- if (isGold) {
+ if (hasMarketDetails) {
  const bw=(contentW-16)/3;
  const details=[
  ['OPERAÇÃO','Compra via corretora'],
- ['QUANTIDADE',row.quantity ? `${row.quantity} cotas` : '—'],
- ['REFERÊNCIA',row.referencePrice?fmt.brl(row.referencePrice):'—']
+ ['QUANTIDADE',row.quantity ? `${row.quantity} ${unit}` : '—'],
+ ['PREÇO DE REFERÊNCIA',row.referencePrice?fmt.brl(row.referencePrice):'—']
  ];
  details.forEach((d,i)=>{
  const x=mx+4+i*(bw+4);
  pdfRoundedRect(pdf,x,cy,bw,9.5,2,[251,250,247],c.border);
- pdf.setTextColor(...c.muted); pdf.setFont('helvetica','bold'); pdf.setFontSize(5.6); pdf.text(d[0],x+2.5,cy+3.2);
- pdf.setTextColor(...c.black); pdf.setFontSize(7.8); pdf.text(d[1],x+2.5,cy+7.2);
+ pdf.setTextColor(...c.muted); pdf.setFont('helvetica','bold'); pdf.setFontSize(5.2); pdf.text(d[0],x+2.5,cy+3.2);
+ pdf.setTextColor(...c.black); pdf.setFontSize(7.6); pdf.text(d[1],x+2.5,cy+7.2);
  });
  cy += 11.5;
  }
@@ -7413,23 +7461,27 @@ function buildActionPlanVectorPdf(plan, report) {
  pdf.setTextColor(85,80,74); pdf.setFont('helvetica','normal'); pdf.setFontSize(noteFont);
  pdf.text(noteLines,mx+7,cy+2.2,{lineHeightFactor:noteLineH});
  }
-
  y += h+3.5;
  });
- // Observação final com altura calculada pelas linhas renderizadas.
+
+ let obsH = 0;
+ let obsLines = [];
  if (plan.observations) {
  const obsFont=6.6, obsLineH=1.2;
- const lines=pdf.splitTextToSize(String(plan.observations),contentW-10).slice(0,3);
- const oh=5.2 + (lines.length * obsFont * 0.3528 * obsLineH) + 2.2;
- pdfRoundedRect(pdf,mx,y,contentW,oh,2.5,c.softGold,[240,216,173]);
- pdf.setTextColor(70,64,56); pdf.setFont('helvetica','normal'); pdf.setFontSize(obsFont);
- pdf.text(lines,mx+5,y+4,{lineHeightFactor:obsLineH});
- y += oh+3.5;
+ obsLines=pdf.splitTextToSize(String(plan.observations),contentW-10).slice(0,4);
+ obsH=5.2 + (obsLines.length * obsFont * 0.3528 * obsLineH) + 2.2;
+ }
+ const checkH=10;
+ if (y + (obsH ? obsH+3.5 : 0) + checkH > maxContentY) y = startContinuationPage();
+
+ if (obsH) {
+ pdfRoundedRect(pdf,mx,y,contentW,obsH,2.5,c.softGold,[240,216,173]);
+ pdf.setTextColor(70,64,56); pdf.setFont('helvetica','normal'); pdf.setFontSize(6.6);
+ pdf.text(obsLines,mx+5,y+4,{lineHeightFactor:1.2});
+ y += obsH+3.5;
  }
 
- // Conferência final sempre na mesma página.
  const ok=Math.abs(totals.difference)<=0.01;
- const checkH=10;
  pdfRoundedRect(pdf,mx,y,contentW,checkH,2.5,ok?c.successBg:c.softGold,ok?[205,232,215]:[240,212,155]);
  pdf.setTextColor(...(ok?c.success:c.goldDark)); pdf.setFont('helvetica','bold'); pdf.setFontSize(7.4);
  pdf.text(ok?'PLANO CONFERIDO':'ATENÇÃO À CONFERÊNCIA',mx+4.5,y+6.2);
